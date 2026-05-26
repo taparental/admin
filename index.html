@@ -326,12 +326,7 @@
       <button class="modal-close" onclick="closeModal('modal-rental')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <form id="form-rental" onsubmit="submitNewRental(event)">
-      <div class="form-group">
-        <label class="form-label">รหัสชุด</label>
-        <input type="text" id="r-clothes-id" list="avail-dresses-dl" required class="form-input" placeholder="พิมพ์รหัสที่ว่าง..." oninput="updatePricePreview()">
-        <datalist id="avail-dresses-dl"></datalist>
-        <div id="price-guide" style="display:none;margin-top:6px;font-size:11px;color:var(--ink-muted);background:var(--cream);padding:6px 10px;border-radius:8px;"><i class="fa-solid fa-tag" style="margin-right:4px;color:var(--rose);"></i>ราคาปกติ: <strong id="price-guide-val">—</strong></div>
-      </div>
+      <!-- ข้อมูลลูกค้า -->
       <div class="form-row form-group">
         <div>
           <label class="form-label">ชื่อลูกค้า</label>
@@ -358,6 +353,17 @@
         <label class="form-label">ที่อยู่จัดส่ง</label>
         <textarea id="r-address" class="form-textarea" placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์ + เบอร์โทร"></textarea>
       </div>
+
+      <!-- รายการชุด -->
+      <div class="form-group">
+        <label class="form-label">รายการชุด</label>
+        <div id="dress-items-list"></div>
+        <button type="button" onclick="addDressItem()" style="width:100%;margin-top:8px;padding:10px;background:var(--cream);color:var(--rose-dark);border:1.5px dashed var(--rose);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Prompt',sans-serif;">
+          <i class="fa-solid fa-plus" style="margin-right:6px;"></i>เพิ่มชุด
+        </button>
+      </div>
+
+      <!-- ยอดรวม -->
       <div class="form-row form-group">
         <div>
           <label class="form-label">ยอดรับเงิน (บาท)</label>
@@ -410,6 +416,61 @@
       </div>
       <div class="price-preview" id="ret-total"></div>
       <button type="submit" class="btn-submit" style="margin-top:14px;"><i class="fa-solid fa-check" style="margin-right:6px;"></i>ยืนยันรับคืน</button>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: EDIT RENTAL -->
+<div id="modal-edit-rental" class="modal-overlay" onclick="handleOverlayClick(event,'modal-edit-rental')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">แก้ไขคิวเช่า</div>
+      <button class="modal-close" onclick="closeModal('modal-edit-rental')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form id="form-edit-rental" onsubmit="submitEditRental(event)">
+      <input type="hidden" id="edit-booking-id">
+      <div class="form-row form-group">
+        <div>
+          <label class="form-label">ชื่อลูกค้า</label>
+          <input type="text" id="edit-customer" required class="form-input">
+        </div>
+        <div>
+          <label class="form-label">เบอร์โทร</label>
+          <input type="tel" id="edit-phone" class="form-input">
+        </div>
+      </div>
+      <div class="form-row form-group">
+        <div><label class="form-label">วันที่รับ</label><input type="date" id="edit-start" required class="form-input"></div>
+        <div><label class="form-label">วันที่คืน</label><input type="date" id="edit-end" required class="form-input"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">วิธีรับชุด</label>
+        <div class="cond-group" id="edit-delivery-picker">
+          <div class="cond-option selected" data-val="pickup"><i class="fa-solid fa-store" style="margin-right:4px;color:var(--rose);"></i>รับเอง</div>
+          <div class="cond-option" data-val="mail"><i class="fa-solid fa-truck-fast" style="margin-right:4px;color:var(--rose);"></i>ส่งแมส</div>
+          <div class="cond-option" data-val="parcel"><i class="fa-solid fa-box" style="margin-right:4px;color:var(--rose);"></i>ส่งพัสดุ</div>
+        </div>
+      </div>
+      <div class="form-group" id="edit-address-wrap" style="display:none;">
+        <label class="form-label">ที่อยู่จัดส่ง</label>
+        <textarea id="edit-address" class="form-textarea"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">รายการชุด</label>
+        <div id="edit-dress-items"></div>
+      </div>
+      <div class="form-row form-group">
+        <div>
+          <label class="form-label">ยอดรับเงิน (บาท)</label>
+          <input type="number" id="edit-deposit" required class="form-input">
+        </div>
+        <div>
+          <label class="form-label">ส่วนลด (บาท)</label>
+          <input type="number" id="edit-discount" class="form-input" value="0">
+        </div>
+      </div>
+      <button type="submit" class="btn-submit" style="margin-top:14px;"><i class="fa-solid fa-check" style="margin-right:6px;"></i>บันทึกการแก้ไข</button>
     </form>
   </div>
 </div>
@@ -571,6 +632,17 @@ window.onload = () => {
       document.getElementById('address-wrap').style.display = (o.dataset.val === 'mail' || o.dataset.val === 'parcel') ? '' : 'none';
     });
   });
+  // edit delivery picker
+  document.querySelectorAll('#edit-delivery-picker .cond-option').forEach(o => {
+    o.addEventListener('click', () => {
+      document.querySelectorAll('#edit-delivery-picker .cond-option').forEach(x => x.classList.remove('selected'));
+      o.classList.add('selected');
+      document.getElementById('edit-address-wrap').style.display = (o.dataset.val === 'mail' || o.dataset.val === 'parcel') ? '' : 'none';
+    });
+  });
+  // init dress items list
+  addDressItem();
+  renderDressItems();
   // dress status picker
   document.querySelectorAll('#d-status-picker .cond-option').forEach(o => {
     o.addEventListener('click', () => {
@@ -665,16 +737,65 @@ function renderDashboard() {
   const due    = active.filter(r => r.end <= today);
   const ongoing = active.filter(r => r.end > today);
 
-  // ── ตรวจหาคิวซ้ำ ─────────────────────────────────
   renderConflicts(active);
 
+  // due today — group by booking
   document.getElementById('dashboard-due-today').innerHTML = due.length === 0
     ? `<div class="empty-state"><i class="fa-solid fa-circle-check"></i><p>ไม่มีรายการรับคืนวันนี้</p></div>`
-    : due.map(r => card(r, today, true)).join('');
+    : renderGroupedCards(due, today);
 
+  // ongoing — group by booking
   document.getElementById('dashboard-active').innerHTML = ongoing.length === 0
     ? `<div class="empty-state"><i class="fa-solid fa-shirt"></i><p>ไม่มีชุดที่กำลังเช่าอยู่</p></div>`
-    : ongoing.map(r => card(r, today, true)).join('');
+    : renderGroupedCards(ongoing, today);
+}
+
+function renderGroupedCards(list, today) {
+  // จัดกลุ่มตาม booking_id
+  const bookingMap = {};
+  list.forEach(r => {
+    const bid = r.booking_id || r.rental_id;
+    if (!bookingMap[bid]) bookingMap[bid] = [];
+    bookingMap[bid].push(r);
+  });
+
+  return Object.entries(bookingMap).map(([bid, items]) => {
+    const first = items[0];
+    const over = first.end < today;
+    const delivery = (first.delivery || 'pickup').toLowerCase();
+    const delIcon = delivery === 'mail'
+      ? `<span style="font-size:10px;color:var(--rose);margin-left:6px;"><i class="fa-solid fa-truck-fast"></i> ส่งแมส</span>`
+      : delivery === 'parcel'
+      ? `<span style="font-size:10px;color:var(--rose);margin-left:6px;"><i class="fa-solid fa-box"></i> ส่งพัสดุ</span>`
+      : `<span style="font-size:10px;color:var(--ink-muted);margin-left:6px;"><i class="fa-solid fa-store"></i> รับเอง</span>`;
+
+    const dressRows = items.map(r => {
+      const d = inventory.find(i => i.id === r.clothes_id);
+      return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid rgba(200,114,106,0.08);">
+        <span class="dress-code" style="font-size:10px;">${r.clothes_id}</span>
+        ${d ? `<span style="font-size:11px;color:var(--ink-muted);flex:1;">${d.name}</span>` : '<span style="flex:1;"></span>'}
+        ${d ? `<span style="font-size:11px;font-weight:700;color:var(--rose);">${CURRENCY}${Number(d.price).toLocaleString()}</span>` : ''}
+        <button onclick="openReturnModal('${r.rental_id}','${r.clothes_id}')" style="background:var(--ink);color:white;border:none;padding:3px 8px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;white-space:nowrap;">รับคืน</button>
+      </div>`;
+    }).join('');
+
+    return `<div class="rental-card" style="flex-direction:column;align-items:stretch;gap:0;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div>
+          <div class="card-customer" style="margin-bottom:2px;">${first.customer}${delIcon}</div>
+          <div class="date-highlight${over?' date-overdue':''}" style="font-size:11px;">${formatDate(first.start)} → ${formatDate(first.end)}${over?'<span class="tag-overdue"><i class="fa-solid fa-triangle-exclamation"></i> เกินกำหนด</span>':''}</div>
+          ${first.deposit ? `<div style="font-size:13px;font-weight:700;color:var(--rose);margin-top:2px;">${CURRENCY}${Number(first.deposit).toLocaleString()}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:5px;">
+          <button onclick="showReceiptByBooking('${bid}')" title="ใบเสร็จ" style="background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.2);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-receipt"></i></button>
+        </div>
+      </div>
+      <div style="background:var(--cream);border-radius:10px;padding:8px 10px;">
+        ${dressRows}
+      </div>
+      ${items.length > 1 ? `<div style="font-size:10px;color:var(--ink-muted);text-align:right;margin-top:4px;">${items.length} ชุด</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 // ─── หาคิวซ้อนของชุดเดียวกัน ─────────────────────────
@@ -824,28 +945,72 @@ function renderInventory() {
 
 function renderHistory() {
   const lbl = {active:'กำลังเช่า', returned:'คืนแล้ว'};
-  document.getElementById('history-list').innerHTML = rentals.length === 0
-    ? `<div class="empty-state"><i class="fa-solid fa-clock-rotate-left"></i><p>ยังไม่มีประวัติ</p></div>`
-    : [...rentals].reverse().map(r => {
-        const d = inventory.find(i => i.id === r.clothes_id);
-        const price = d ? `${CURRENCY}${Number(d.price).toLocaleString()}` : '';
-        const isActive = r.status === 'active';
-        return `<div class="rental-card">
-          <div class="card-left">
-            <div class="card-customer">${r.customer}</div>
-            <div class="card-meta"><span class="dress-code">${r.clothes_id}</span>${d?`<span style="font-size:10px;color:var(--ink-muted);margin-left:6px;">${d.name}</span>`:''}</div>
-            <div class="date-highlight">${formatDate(r.start)} → ${formatDate(r.end)}</div>
-            ${price?`<div style="font-size:13px;font-weight:700;color:var(--rose);margin-top:2px;">${price}</div>`:''}
-            ${r.condition?`<div style="font-size:10px;color:var(--ink-muted);margin-top:2px;">สภาพ: ${r.condition}${r.fine&&Number(r.fine)>0?` · ค่าปรับ ${CURRENCY}${Number(r.fine).toLocaleString()}`:''}</div>`:''}
+  const el = document.getElementById('history-list');
+  if (rentals.length === 0) {
+    el.innerHTML = `<div class="empty-state"><i class="fa-solid fa-clock-rotate-left"></i><p>ยังไม่มีประวัติ</p></div>`;
+    return;
+  }
+
+  // จัดกลุ่มตาม booking_id
+  const bookingMap = {};
+  [...rentals].reverse().forEach(r => {
+    const bid = r.booking_id || r.rental_id;
+    if (!bookingMap[bid]) bookingMap[bid] = [];
+    bookingMap[bid].push(r);
+  });
+
+  el.innerHTML = Object.entries(bookingMap).map(([bid, items]) => {
+    const first = items[0];
+    const isActive = items.some(r => r.status === 'active');
+    const allReturned = items.every(r => r.status === 'returned');
+    const statusLabel = isActive ? 'กำลังเช่า' : 'คืนแล้ว';
+    const delivery = (first.delivery || 'pickup').toLowerCase();
+    const delIcon = delivery === 'mail'
+      ? `<span style="font-size:10px;color:var(--rose);margin-left:6px;"><i class="fa-solid fa-truck-fast"></i> ส่งแมส</span>`
+      : delivery === 'parcel'
+      ? `<span style="font-size:10px;color:var(--rose);margin-left:6px;"><i class="fa-solid fa-box"></i> ส่งพัสดุ</span>`
+      : `<span style="font-size:10px;color:var(--ink-muted);margin-left:6px;"><i class="fa-solid fa-store"></i> รับเอง</span>`;
+
+    // รายการชุดทั้งหมดใน booking
+    const dressRows = items.map(r => {
+      const d = inventory.find(i => i.id === r.clothes_id);
+      const over = r.end < getToday();
+      return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid rgba(200,114,106,0.08);">
+        <span class="dress-code" style="font-size:10px;">${r.clothes_id}</span>
+        ${d ? `<span style="font-size:11px;color:var(--ink-muted);flex:1;">${d.name}</span>` : '<span style="flex:1;"></span>'}
+        ${d ? `<span style="font-size:11px;font-weight:700;color:var(--rose);">${CURRENCY}${Number(d.price).toLocaleString()}</span>` : ''}
+        ${r.status === 'active' ? `<button onclick="openReturnModal('${r.rental_id}','${r.clothes_id}')" style="background:var(--ink);color:white;border:none;padding:3px 8px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;white-space:nowrap;">รับคืน</button>` : `<span style="font-size:9px;color:var(--green);font-weight:600;">✓ คืนแล้ว</span>`}
+        ${over && r.status === 'active' ? `<span style="font-size:9px;color:#c74545;font-weight:700;">เกินกำหนด</span>` : ''}
+      </div>`;
+    }).join('');
+
+    // ยอดรวม (เอาจาก first row)
+    const deposit = Number(first.deposit || 0);
+
+    return `<div class="rental-card" style="flex-direction:column;align-items:stretch;gap:0;">
+      <!-- header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+        <div>
+          <div class="card-customer" style="margin-bottom:2px;">${first.customer}${delIcon}</div>
+          <div style="font-size:11px;color:var(--ink-muted);">${formatDate(first.start)} → ${formatDate(first.end)}</div>
+          ${deposit ? `<div style="font-size:13px;font-weight:700;color:var(--rose);margin-top:2px;">${CURRENCY}${deposit.toLocaleString()}</div>` : ''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+          <span style="padding:4px 10px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;${isActive?'background:var(--rose-light);color:var(--rose-dark);':'background:var(--green-light);color:var(--green);'}">${statusLabel}</span>
+          <div style="display:flex;gap:5px;">
+            <button onclick="openEditRental('${bid}')" title="แก้ไข" style="background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.2);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-pen"></i></button>
+            <button onclick="showReceiptByBooking('${bid}')" title="ใบเสร็จ" style="background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.2);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-receipt"></i></button>
+            <button onclick="deleteBooking('${bid}')" title="ลบ" style="background:white;color:#c74545;border:1px solid rgba(199,69,69,0.2);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-trash"></i></button>
           </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
-            <span style="display:inline-block;padding:5px 11px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;${isActive?'background:var(--rose-light);color:var(--rose-dark);':'background:var(--green-light);color:var(--green);'}">${lbl[r.status]||r.status}</span>
-            ${isActive?`<button class="btn-return" style="font-size:10px;padding:6px 10px;" onclick="openReturnModal('${r.rental_id}','${r.clothes_id}')">รับคืน</button>`:''}
-            <button onclick="showReceipt('${r.rental_id}')" style="background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.2);padding:5px 10px;border-radius:8px;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'Prompt',sans-serif;"><i class="fa-solid fa-receipt"></i> ใบเสร็จ</button>
-            <button onclick="deleteRental('${r.rental_id}','${r.clothes_id}')" style="background:white;color:#c74545;border:1px solid rgba(199,69,69,0.25);padding:5px 10px;border-radius:8px;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'Prompt',sans-serif;"><i class="fa-solid fa-trash"></i> ลบ</button>
-          </div>
-        </div>`;
-      }).join('');
+        </div>
+      </div>
+      <!-- รายการชุด -->
+      <div style="background:var(--cream);border-radius:10px;padding:8px 10px;">
+        ${dressRows}
+      </div>
+      ${items.length > 1 ? `<div style="font-size:10px;color:var(--ink-muted);text-align:right;margin-top:4px;">${items.length} ชุด</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function updateDataLists() {
@@ -1006,19 +1171,61 @@ function changeCalMonth(delta) {
   onQueueChange();
 }
 
-/* ── NEW RENTAL ── */
-function updatePricePreview() {
-  const id = document.getElementById('r-clothes-id').value.trim().toUpperCase();
-  const d  = inventory.find(i => i.id === id);
-  const guide = document.getElementById('price-guide');
-  const guideVal = document.getElementById('price-guide-val');
-  if (d && Number(d.price) > 0) {
-    guide.style.display = 'block';
-    guideVal.textContent = `${CURRENCY}${Number(d.price).toLocaleString()}`;
-  } else {
-    guide.style.display = 'none';
+/* ── DRESS ITEMS (multi-dress form) ── */
+let dressItems = []; // [{id, tmpId}]
+
+function addDressItem(clothesId = '') {
+  const tmpId = 'di-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+  dressItems.push({ tmpId, clothesId });
+  renderDressItems();
+}
+
+function removeDressItem(tmpId) {
+  dressItems = dressItems.filter(d => d.tmpId !== tmpId);
+  renderDressItems();
+}
+
+function renderDressItems() {
+  const el = document.getElementById('dress-items-list');
+  if (!el) return;
+  if (dressItems.length === 0) {
+    el.innerHTML = `<div style="text-align:center;color:var(--ink-muted);font-size:12px;padding:10px;">ยังไม่มีชุด กด "+ เพิ่มชุด" ด้านล่าง</div>`;
+    return;
+  }
+  el.innerHTML = dressItems.map((item, idx) => {
+    const d = inventory.find(i => i.id === item.clothesId);
+    const priceHint = d ? `<span style="font-size:10px;color:var(--rose);margin-left:6px;">฿${Number(d.price).toLocaleString()}</span>` : '';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="flex:1;">
+        <input type="text" value="${item.clothesId}" list="avail-dresses-dl"
+          class="form-input" placeholder="รหัสชุด..."
+          oninput="updateDressItem('${item.tmpId}', this.value)"
+          style="font-size:13px;">
+        ${priceHint ? `<div style="margin-top:3px;">${priceHint}</div>` : ''}
+      </div>
+      <button type="button" onclick="removeDressItem('${item.tmpId}')"
+        style="background:#fff0f0;color:#c74545;border:1px solid #ffd0d0;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;flex-shrink:0;">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function updateDressItem(tmpId, value) {
+  const item = dressItems.find(d => d.tmpId === tmpId);
+  if (item) {
+    item.clothesId = value.trim().toUpperCase();
+    // อัพเดต price hint โดยไม่ re-render ทั้งหมด
+    const d = inventory.find(i => i.id === item.clothesId);
+    const inputEl = document.querySelector(`input[oninput*="${tmpId}"]`);
+    if (inputEl && inputEl.nextElementSibling) {
+      inputEl.nextElementSibling.innerHTML = d ? `<span style="font-size:10px;color:var(--rose);margin-left:6px;">฿${Number(d.price).toLocaleString()}</span>` : '';
+    }
   }
 }
+
+/* ── NEW RENTAL (multi-dress) ── */
+function updatePricePreview() {} // ไม่ใช้แล้ว
 
 async function submitNewRental(e) {
   e.preventDefault();
@@ -1029,69 +1236,132 @@ async function submitNewRental(e) {
     showToast('กรุณากรอกที่อยู่จัดส่ง', 'warn');
     return;
   }
-  const clothes_id = document.getElementById('r-clothes-id').value.trim().toUpperCase();
-  const deposit    = Number(document.getElementById('r-deposit').value || 0);
-  const discount   = Number(document.getElementById('r-discount').value || 0);
-  const customer   = document.getElementById('r-customer').value.trim();
-  const phone      = document.getElementById('r-phone').value.trim();
-
-  // เช็คว่ามีชุดในคลังไหม
-  const dressExists = inventory.find(i => i.id === clothes_id);
-  if (!dressExists) {
-    showToast(`ไม่พบชุด "${clothes_id}" ในคลัง กรุณาเพิ่มชุดก่อน`, 'err');
+  // เช็ครายการชุด
+  const validItems = dressItems.filter(d => d.clothesId.trim() !== '');
+  if (validItems.length === 0) {
+    showToast('กรุณาเพิ่มชุดอย่างน้อย 1 ชุด', 'warn');
     return;
   }
+  // เช็คว่าทุกชุดมีในคลัง
+  for (const item of validItems) {
+    if (!inventory.find(i => i.id === item.clothesId)) {
+      showToast(`ไม่พบชุด "${item.clothesId}" ในคลัง`, 'err');
+      return;
+    }
+  }
 
-  const rental_id = 'R-' + Date.now();
-  const newRental = {
-    rental_id,
-    clothes_id,
-    customer,
-    phone,
-    start:    document.getElementById('r-start').value,
-    end:      document.getElementById('r-end').value,
-    discount,
-    deposit,
-    delivery,
-    address,
-    status:   'active'
-  };
+  const customer = document.getElementById('r-customer').value.trim();
+  const phone    = document.getElementById('r-phone').value.trim();
+  const deposit  = Number(document.getElementById('r-deposit').value || 0);
+  const discount = Number(document.getElementById('r-discount').value || 0);
+  const start    = document.getElementById('r-start').value;
+  const end      = document.getElementById('r-end').value;
+  const booking_id = 'B-' + Date.now();
+
   setLoading(true);
   try {
-    await sbPost('rentals', newRental);
-    await sbPatch('inventory', { id: clothes_id }, { status: 'rented' });
+    // insert ทุกชุดใน booking เดียว
+    for (const item of validItems) {
+      const rental_id = 'R-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+      await sbPost('rentals', {
+        rental_id, booking_id,
+        clothes_id: item.clothesId,
+        customer, phone, start, end,
+        discount: validItems.indexOf(item) === 0 ? discount : 0,
+        deposit:  validItems.indexOf(item) === 0 ? deposit  : 0,
+        delivery, address, status: 'active'
+      });
+      await sbPatch('inventory', { id: item.clothesId }, { status: 'rented' });
+    }
 
-    // บันทึก/อัพเดต customers (phone เป็น key, นับจาก rentals จริง)
+    // อัพเดต customers
     if (phone) {
       try {
-        const allRentals = await sbGet('rentals', `phone=eq.${encodeURIComponent(phone)}&select=rental_id`);
-        const count = (allRentals ? allRentals.length : 0) + 1;
         const existing = await sbGet('customers', `phone=eq.${encodeURIComponent(phone)}&select=*`);
         if (existing && existing.length > 0) {
-          await sbPatch('customers', { phone }, {
-            name,
-            rental_count: count,
-            last_rental: newRental.start
-          });
+          await sbPatch('customers', { phone }, { name: customer, last_rental: start });
         } else {
-          await sbPost('customers', {
-            phone,
-            name,
-            rental_count: count,
-            last_rental: newRental.start
-          });
+          await sbPost('customers', { phone, name: customer, rental_count: 1, last_rental: start });
         }
-      } catch(ce) { console.warn('customers update skipped:', ce.message); }
+      } catch(ce) { console.warn('customers skipped:', ce.message); }
     }
 
     await refreshData();
     closeModal('modal-rental');
     document.getElementById('form-rental').reset();
-    document.getElementById('price-guide').style.display = 'none';
+    dressItems = [];
+    renderDressItems();
     document.querySelectorAll('#delivery-picker .cond-option').forEach((o,i) => o.classList.toggle('selected', i === 0));
     document.getElementById('address-wrap').style.display = 'none';
-    showReceipt(rental_id);
+    showReceiptByBooking(booking_id);
     showToast('บันทึกการเช่าสำเร็จ', 'ok');
+  } catch(err) { showToast(err.message, 'err'); }
+  finally { setLoading(false); }
+}
+
+/* ── EDIT RENTAL ── */
+function openEditRental(bookingId) {
+  const bookingRentals = rentals.filter(r => (r.booking_id || r.rental_id) === bookingId);
+  if (!bookingRentals.length) return;
+  const first = bookingRentals[0];
+
+  document.getElementById('edit-booking-id').value  = bookingId;
+  document.getElementById('edit-customer').value    = first.customer || '';
+  document.getElementById('edit-phone').value       = first.phone || '';
+  document.getElementById('edit-start').value       = first.start || '';
+  document.getElementById('edit-end').value         = first.end || '';
+  document.getElementById('edit-deposit').value     = first.deposit || 0;
+  document.getElementById('edit-discount').value    = first.discount || 0;
+  document.getElementById('edit-address').value     = first.address || '';
+
+  // delivery picker
+  const delVal = first.delivery || 'pickup';
+  document.querySelectorAll('#edit-delivery-picker .cond-option').forEach(o => {
+    o.classList.toggle('selected', o.dataset.val === delVal);
+  });
+  document.getElementById('edit-address-wrap').style.display =
+    (delVal === 'mail' || delVal === 'parcel') ? '' : 'none';
+
+  // รายการชุด (read-only แสดง)
+  const dressHtml = bookingRentals.map(r => {
+    const d = inventory.find(i => i.id === r.clothes_id);
+    return `<div style="background:var(--cream);padding:8px 10px;border-radius:8px;margin-bottom:6px;font-size:12px;">
+      <strong>${r.clothes_id}</strong> ${d ? `— ${d.name}` : ''} 
+      <span style="color:var(--ink-muted)">(${r.status})</span>
+    </div>`;
+  }).join('');
+  document.getElementById('edit-dress-items').innerHTML = dressHtml;
+
+  openModal('modal-edit-rental');
+}
+
+async function submitEditRental(e) {
+  e.preventDefault();
+  const bookingId = document.getElementById('edit-booking-id').value;
+  const selDel = document.querySelector('#edit-delivery-picker .cond-option.selected');
+  const delivery = selDel ? selDel.dataset.val : 'pickup';
+  const address  = (delivery === 'mail' || delivery === 'parcel') ? document.getElementById('edit-address').value.trim() : '';
+
+  const updates = {
+    customer: document.getElementById('edit-customer').value.trim(),
+    phone:    document.getElementById('edit-phone').value.trim(),
+    start:    document.getElementById('edit-start').value,
+    end:      document.getElementById('edit-end').value,
+    deposit:  Number(document.getElementById('edit-deposit').value || 0),
+    discount: Number(document.getElementById('edit-discount').value || 0),
+    delivery, address
+  };
+
+  setLoading(true);
+  try {
+    // อัพเดตทุก row ที่มี booking_id เดียวกัน
+    const bookingRentals = rentals.filter(r => (r.booking_id || r.rental_id) === bookingId);
+    for (const r of bookingRentals) {
+      await sbPatch('rentals', { rental_id: r.rental_id }, updates);
+    }
+    await refreshData();
+    closeModal('modal-edit-rental');
+    showToast('แก้ไขคิวเรียบร้อย', 'ok');
   } catch(err) { showToast(err.message, 'err'); }
   finally { setLoading(false); }
 }
@@ -1166,6 +1436,76 @@ async function submitReturn(e) {
     showToast(`รับคืนชุด ${clothes_id} แล้ว`, 'ok');
   } catch(err) { showToast(err.message, 'err'); }
   finally { setLoading(false); }
+}
+
+/* ── RECEIPT BY BOOKING ── */
+function showReceiptByBooking(bookingId) {
+  const bookingRentals = rentals.filter(r => (r.booking_id || r.rental_id) === bookingId);
+  if (!bookingRentals.length) { showToast('ไม่พบข้อมูลใบเสร็จ', 'err'); return; }
+  const first = bookingRentals[0];
+  const delivery = (first.delivery || 'pickup').toLowerCase();
+  const delLabel = delivery === 'mail' ? 'ส่งแมส' : delivery === 'parcel' ? 'ส่งพัสดุ' : 'รับเอง';
+  const deposit  = Number(first.deposit || 0);
+  const discount = Number(first.discount || 0);
+  const today = new Date();
+  const issuedTime = `${String(today.getHours()).padStart(2,'0')}:${String(today.getMinutes()).padStart(2,'0')}`;
+
+  const dressRows = bookingRentals.map(r => {
+    const d = inventory.find(i => i.id === r.clothes_id);
+    const price = d ? Number(d.price) : 0;
+    return `<div style="display:flex;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #f5ebe8;">
+      <div>
+        <strong style="font-size:12px;">${d ? d.name : r.clothes_id}</strong>
+        <div style="font-size:10px;color:var(--ink-muted);">รหัส ${r.clothes_id}${d ? ` · ไซส์ ${d.size}` : ''}</div>
+      </div>
+      <div style="font-weight:700;color:var(--rose);font-size:12px;">${CURRENCY}${price.toLocaleString()}</div>
+    </div>`;
+  }).join('');
+
+  const html = `
+    <div id="receipt-printable" style="background:white;border:1px solid #e5d5d0;border-radius:12px;padding:22px 18px;font-family:'Prompt',sans-serif;color:var(--ink);">
+      <div style="text-align:center;border-bottom:2px dashed rgba(200,114,106,0.3);padding-bottom:14px;margin-bottom:16px;">
+        <div style="font-family:serif;font-size:24px;font-weight:300;letter-spacing:2px;">TAPA</div>
+        <div style="font-size:11px;color:var(--ink-muted);letter-spacing:0.1em;margin-top:2px;">RENTAL · ใบเสร็จรับเงิน</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:14px;color:var(--ink-light);">
+        <div>เลขที่: <strong style="color:var(--ink);">${bookingId}</strong></div>
+        <div>${formatDate(getToday())} ${issuedTime}</div>
+      </div>
+      <div style="background:var(--cream);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+        <div style="font-size:10px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">ลูกค้า</div>
+        <div style="font-size:14px;font-weight:600;">${first.customer}</div>
+        ${first.phone ? `<div style="font-size:11px;color:var(--ink-muted);margin-top:2px;">${first.phone}</div>` : ''}
+      </div>
+      <div style="margin-bottom:14px;">
+        <div style="font-size:10px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">รายการเช่า (${bookingRentals.length} ชุด)</div>
+        <div style="background:white;border:1px solid #f0e0db;border-radius:10px;padding:12px;">
+          ${dressRows}
+        </div>
+      </div>
+      <div style="margin-bottom:14px;font-size:12px;">
+        <div style="display:flex;justify-content:space-between;padding:4px 0;">
+          <span style="color:var(--ink-muted);">ระยะเวลา</span>
+          <span><strong>${formatDate(first.start)}</strong> ถึง <strong>${formatDate(first.end)}</strong></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0;">
+          <span style="color:var(--ink-muted);">วิธีรับชุด</span>
+          <span><strong>${delLabel}</strong></span>
+        </div>
+        ${(delivery === 'mail' || delivery === 'parcel') && first.address ? `<div style="background:var(--cream);padding:8px 10px;border-radius:8px;margin-top:6px;font-size:11px;"><i class="fa-solid fa-location-dot" style="margin-right:4px;color:var(--rose);"></i>${String(first.address).replace(/\n/g,'<br>')}</div>` : ''}
+      </div>
+      <div style="border-top:1px dashed rgba(200,114,106,0.3);padding-top:12px;font-size:12px;">
+        ${discount > 0 ? `<div style="display:flex;justify-content:space-between;padding:3px 0;color:var(--green);"><span>ส่วนลด</span><span>−${CURRENCY}${discount.toLocaleString()}</span></div>` : ''}
+        <div style="display:flex;justify-content:space-between;padding:10px 0 4px;font-size:16px;font-weight:700;border-top:1px solid #f0e0db;margin-top:6px;">
+          <span>ยอดที่ต้องชำระ</span>
+          <span style="color:var(--rose);">${CURRENCY}${deposit.toLocaleString()}</span>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:10px;color:var(--ink-muted);margin-top:16px;padding-top:12px;border-top:1px dashed rgba(200,114,106,0.2);">ขอบคุณที่ใช้บริการ TAPA Rental</div>
+    </div>`;
+
+  document.getElementById('receipt-content').innerHTML = html;
+  document.getElementById('modal-receipt').style.display = 'flex';
 }
 
 /* ── RECEIPT ── */
@@ -1309,21 +1649,21 @@ async function markRepairDone(id) {
   finally { setLoading(false); }
 }
 
-/* ── DELETE RENTAL ── */
-async function deleteRental(rentalId, clothesId) {
-  if (!confirm(`ลบรายการ ${rentalId} ออกจากประวัติ?\nถ้าชุดยังเช่าอยู่จะถูกเปลี่ยนสถานะกลับเป็น "ว่าง" ด้วย`)) return;
+/* ── DELETE BOOKING (all items in booking) ── */
+async function deleteBooking(bookingId) {
+  const items = rentals.filter(r => (r.booking_id || r.rental_id) === bookingId);
+  if (!confirm(`ลบ booking นี้ออก? (${items.length} ชุด)\nถ้าชุดยังเช่าอยู่จะถูกเปลี่ยนสถานะกลับเป็น "ว่าง" ด้วย`)) return;
   setLoading(true);
   try {
-    const r = rentals.find(x => x.rental_id === rentalId);
-    // ถ้า active ให้คืนสถานะชุด
-    if (r && r.status === 'active') {
-      await sbPatch('inventory', { id: clothesId }, { status: 'available' });
+    for (const r of items) {
+      if (r.status === 'active') {
+        await sbPatch('inventory', { id: r.clothes_id }, { status: 'available' });
+      }
+      await fetch(`${SUPABASE_URL}/rest/v1/rentals?rental_id=eq.${encodeURIComponent(r.rental_id)}`, {
+        method: 'DELETE',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+      });
     }
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rentals?rental_id=eq.${encodeURIComponent(rentalId)}`, {
-      method: 'DELETE',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
-    });
-    if (!res.ok) throw new Error('ลบไม่สำเร็จ');
     await refreshData();
     showToast('ลบรายการแล้ว', 'ok');
   } catch(err) { showToast(err.message, 'err'); }

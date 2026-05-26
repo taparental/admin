@@ -1061,21 +1061,23 @@ async function submitNewRental(e) {
     await sbPost('rentals', newRental);
     await sbPatch('inventory', { id: clothes_id }, { status: 'rented' });
 
-    // บันทึก/อัพเดต customers (phone เป็น primary key)
+    // บันทึก/อัพเดต customers (phone เป็น key, นับจาก rentals จริง)
     if (phone) {
       try {
+        const allRentals = await sbGet('rentals', `phone=eq.${encodeURIComponent(phone)}&select=rental_id`);
+        const count = (allRentals ? allRentals.length : 0) + 1;
         const existing = await sbGet('customers', `phone=eq.${encodeURIComponent(phone)}&select=*`);
         if (existing && existing.length > 0) {
           await sbPatch('customers', { phone }, {
             name,
-            rental_count: Number(existing[0].rental_count || 0) + 1,
+            rental_count: count,
             last_rental: newRental.start
           });
         } else {
           await sbPost('customers', {
             phone,
             name,
-            rental_count: 1,
+            rental_count: count,
             last_rental: newRental.start
           });
         }

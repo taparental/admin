@@ -551,6 +551,10 @@
         <div><label class="form-label">รหัสชุด</label><input type="text" id="d-id" required class="form-input" placeholder="D-001"></div>
         <div><label class="form-label">ไซส์</label><input type="text" id="d-size" required class="form-input" placeholder="M"></div>
       </div>
+      <div class="form-group">
+        <label class="form-label">รหัสกลุ่ม <span style="font-size:10px;color:var(--ink-muted);font-weight:400;">(ถ้าชุดนี้มีหลายไซส์ — ใส่รหัสเดียวกัน)</span></label>
+        <input type="text" id="d-group-id" class="form-input" placeholder="เช่น T100 (ไม่บังคับ)" style="font-size:13px;">
+      </div>
       <div class="form-group"><label class="form-label">ชื่อ / รายละเอียด</label><input type="text" id="d-name" required class="form-input" placeholder="เช่น ชุดราตรีสีแดง"></div>
       <div class="form-group"><label class="form-label">ราคาเช่า (บาท)</label><input type="number" id="d-price" required class="form-input" placeholder="500"></div>
       <div class="form-group">
@@ -1142,48 +1146,98 @@ function card(r, today, showBtn) {
 
 function renderInventory() {
   const q  = (document.getElementById('search-inv')?.value||'').toLowerCase();
-  let fl = inventory.filter(i => (i.id||'').toLowerCase().includes(q) || (i.name||'').toLowerCase().includes(q));
-  // ✨ ชุดที่ส่งซ่อมขึ้นก่อนเสมอ
+  let fl = inventory.filter(i => (i.id||'').toLowerCase().includes(q) || (i.name||'').toLowerCase().includes(q) || (i.group_id||'').toLowerCase().includes(q));
+
   fl.sort((a, b) => {
     const aRep = a.status === 'repairing' ? 0 : 1;
     const bRep = b.status === 'repairing' ? 0 : 1;
     return aRep - bRep;
   });
-  const lbl = {available:'ว่าง', rented:'ไม่ว่าง', repairing:'ซ่อม'};
-  document.getElementById('inv-grid').innerHTML = fl.length === 0
+
+  const lbl = {available:'ว่าง', rented:'ไม่ว่าง', repairing:'ซ่อม', cleaning:'ซัก'};
+
+  // จัดกลุ่มตาม group_id — ชุดที่ไม่มี group_id แสดงแยก
+  const groups = {};
+  const singles = [];
+  fl.forEach(i => {
+    if (i.group_id && i.group_id.trim()) {
+      if (!groups[i.group_id]) groups[i.group_id] = [];
+      groups[i.group_id].push(i);
+    } else {
+      singles.push(i);
+    }
+  });
+
+  const makeCard = (i) => {
+    const hasImg = i.image_url && String(i.image_url).trim().startsWith('http');
+    const img = hasImg
+      ? `<img class="inv-img" src="${i.image_url}" alt="${i.name}" onerror="this.outerHTML='<div class=\\'inv-img-placeholder\\'><i class=\\'fa-solid fa-shirt\\'></i></div>'">`
+      : `<div class="inv-img-placeholder"><i class="fa-solid fa-shirt"></i></div>`;
+    const statusBadge = (i.status === 'repairing' || i.status === 'cleaning')
+      ? `<span class="badge ${i.status}" style="position:absolute;top:8px;right:8px;box-shadow:0 2px 6px rgba(0,0,0,0.15);">${lbl[i.status]||i.status}</span>`
+      : '';
+    const count = Number(i.rental_count || 0);
+    const countBadge = count > 0
+      ? `<span style="position:absolute;top:8px;left:8px;background:rgba(45,31,26,0.7);color:white;padding:3px 8px;border-radius:12px;font-size:9px;font-weight:600;backdrop-filter:blur(4px);"><i class="fa-solid fa-handshake" style="margin-right:3px;"></i>${count}</span>`
+      : '';
+    const repairBtn = (i.status === 'repairing')
+      ? `<button onclick="event.stopPropagation();markRepairDone('${i.id}')" style="width:100%;margin-top:6px;padding:8px;background:var(--green);color:white;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;"><i class="fa-solid fa-screwdriver-wrench" style="margin-right:4px;"></i>ซ่อมเสร็จแล้ว</button>`
+      : '';
+    return `<div class="inv-card" onclick="showDressDetail('${i.id}')">
+      <div style="position:relative;">${img}${countBadge}${statusBadge}</div>
+      <div class="inv-body">
+        <div class="inv-card-top">
+          <div class="inv-dress-id">${i.id}</div>
+          <div class="inv-meta">ไซส์ ${i.size}</div>
+        </div>
+        <div class="inv-name">${i.name}</div>
+        <div class="inv-price">${CURRENCY}${Number(i.price).toLocaleString()}</div>
+        ${repairBtn}
+      </div>
+    </div>`;
+  };
+
+  const makeGroupCard = (gid, items) => {
+    const main = items[0];
+    const hasImg = main.image_url && String(main.image_url).trim().startsWith('http');
+    const img = hasImg
+      ? `<img class="inv-img" src="${main.image_url}" alt="${main.name}" onerror="this.outerHTML='<div class=\\'inv-img-placeholder\\'><i class=\\'fa-solid fa-shirt\\'></i></div>'">`
+      : `<div class="inv-img-placeholder"><i class="fa-solid fa-shirt"></i></div>`;
+    const totalCount = items.reduce((s, i) => s + Number(i.rental_count||0), 0);
+    const countBadge = totalCount > 0
+      ? `<span style="position:absolute;top:8px;left:8px;background:rgba(45,31,26,0.7);color:white;padding:3px 8px;border-radius:12px;font-size:9px;font-weight:600;backdrop-filter:blur(4px);"><i class="fa-solid fa-handshake" style="margin-right:3px;"></i>${totalCount}</span>`
+      : '';
+    const sizeBadges = items.map(i => {
+      const avail = i.status === 'available';
+      const repairing = i.status === 'repairing';
+      const color = avail ? 'var(--green)' : repairing ? '#c74545' : 'var(--rose)';
+      const bg = avail ? 'var(--green-light)' : repairing ? '#fff0f0' : 'var(--rose-light)';
+      return `<span onclick="event.stopPropagation();showDressDetail('${i.id}')" 
+        style="padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:${bg};color:${color};">
+        ${i.size}
+      </span>`;
+    }).join('');
+    const groupBadge = `<span style="position:absolute;top:8px;right:8px;background:rgba(200,114,106,0.85);color:white;padding:3px 7px;border-radius:10px;font-size:9px;font-weight:700;backdrop-filter:blur(4px);">${items.length} ไซส์</span>`;
+    return `<div class="inv-card" onclick="showDressDetail('${main.id}')">
+      <div style="position:relative;">${img}${countBadge}${groupBadge}</div>
+      <div class="inv-body">
+        <div class="inv-card-top">
+          <div class="inv-dress-id">${gid}</div>
+        </div>
+        <div class="inv-name">${main.name}</div>
+        <div class="inv-price">${CURRENCY}${Number(main.price).toLocaleString()}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">${sizeBadges}</div>
+      </div>
+    </div>`;
+  };
+
+  const groupCards = Object.entries(groups).map(([gid, items]) => makeGroupCard(gid, items));
+  const singleCards = singles.map(i => makeCard(i));
+  const allCards = [...groupCards, ...singleCards];
+
+  document.getElementById('inv-grid').innerHTML = allCards.length === 0
     ? `<div class="empty-state" style="grid-column:1/-1"><i class="fa-solid fa-shirt"></i><p>ไม่พบชุด</p></div>`
-    : fl.map(i => {
-        const hasImg = i.image_url && String(i.image_url).trim() && String(i.image_url).startsWith('http');
-        const img = hasImg
-          ? `<img class="inv-img" src="${i.image_url}" alt="${i.name}" onerror="this.outerHTML='<div class=\\'inv-img-placeholder\\'><i class=\\'fa-solid fa-shirt\\'></i></div>'">`
-          : `<div class="inv-img-placeholder"><i class="fa-solid fa-shirt"></i></div>`;
-        const statusBadge = (i.status === 'repairing')
-          ? `<span class="badge ${i.status}" style="position:absolute;top:8px;right:8px;box-shadow:0 2px 6px rgba(0,0,0,0.15);">${lbl[i.status]||i.status}</span>`
-          : '';
-        const count = Number(i.rental_count || 0);
-        const countBadge = count > 0
-          ? `<span style="position:absolute;top:8px;left:8px;background:rgba(45,31,26,0.7);color:white;padding:3px 8px;border-radius:12px;font-size:9px;font-weight:600;backdrop-filter:blur(4px);"><i class="fa-solid fa-handshake" style="margin-right:3px;"></i>${count}</span>`
-          : '';
-        const repairBtn = (i.status === 'repairing')
-          ? `<button onclick="event.stopPropagation();markRepairDone('${i.id}')" style="width:100%;margin-top:6px;padding:8px;background:var(--green);color:white;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;"><i class="fa-solid fa-screwdriver-wrench" style="margin-right:4px;"></i>ซ่อมเสร็จแล้ว</button>`
-          : '';
-        return `<div class="inv-card" onclick="showDressDetail('${i.id}')">
-          <div style="position:relative;">
-            ${img}
-            ${countBadge}
-            ${statusBadge}
-          </div>
-          <div class="inv-body">
-            <div class="inv-card-top">
-              <div class="inv-dress-id">${i.id}</div>
-              <div class="inv-meta">ไซส์ ${i.size}</div>
-            </div>
-            <div class="inv-name">${i.name}</div>
-            <div class="inv-price">${CURRENCY}${Number(i.price).toLocaleString()}</div>
-            ${repairBtn}
-          </div>
-        </div>`;
-      }).join('');
+    : allCards.join('');
 }
 
 function renderHistory() {
@@ -1440,56 +1494,104 @@ function renderDressItems() {
   const el = document.getElementById('dress-items-list');
   if (!el) return;
   if (dressItems.length === 0) {
-    el.innerHTML = `<div style="text-align:center;color:var(--ink-muted);font-size:12px;padding:10px;">ยังไม่มีชุด กด "+ เพิ่มชุด" ด้านล่าง</div>`;
+    el.innerHTML = '<div style="text-align:center;color:var(--ink-muted);font-size:12px;padding:10px;">ยังไม่มีชุด กด &quot;+ เพิ่มชุด&quot; ด้านล่าง</div>';
     updateRentalTotal();
     return;
   }
-  el.innerHTML = dressItems.map((item) => {
-    const d = inventory.find(i => i.id === item.clothesId);
-    const guide = d ? `<div style="font-size:10px;color:var(--rose);margin-top:2px;">ราคาปกติ ฿${Number(d.price).toLocaleString()}</div>` : '';
-    return `<div style="background:var(--cream);border-radius:10px;padding:10px;margin-bottom:8px;">
-      <div style="display:flex;gap:8px;align-items:flex-start;">
-        <div style="flex:1.5;min-width:0;">
-          <label style="font-size:10px;color:var(--ink-muted);">รหัสชุด</label>
-          <input type="text" value="${item.clothesId}" list="avail-dresses-dl"
-            class="form-input" placeholder="รหัส..."
-            oninput="updateDressCode('${item.tmpId}', this.value)"
-            style="font-size:13px;">
-          ${guide}
-        </div>
-        <div style="flex:1;min-width:0;">
-          <label style="font-size:10px;color:var(--ink-muted);">ราคา</label>
-          <input type="number" value="${item.price || ''}" class="form-input" placeholder="0"
-            oninput="updateDressPrice('${item.tmpId}', this.value)" style="font-size:13px;">
-        </div>
-        <button type="button" onclick="removeDressItem('${item.tmpId}')"
-          style="background:white;color:#c74545;border:1px solid #ffd0d0;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;flex-shrink:0;margin-top:18px;">
-          <i class="fa-solid fa-trash"></i>
-        </button>
-      </div>
-    </div>`;
-  }).join('');
+  dressItems.forEach((item) => {
+    if (document.getElementById('dress-row-' + item.tmpId)) return;
+    const row = document.createElement('div');
+    row.id = 'dress-row-' + item.tmpId;
+    row.style.cssText = 'background:var(--cream);border-radius:10px;padding:10px;margin-bottom:8px;';
+    row.innerHTML = '<div style="display:flex;gap:8px;align-items:flex-start;">' +
+      '<div style="flex:1.5;min-width:0;">' +
+      '<label style="font-size:10px;color:var(--ink-muted);">รหัสชุด</label>' +
+      '<input type="text" id="code-' + item.tmpId + '" list="avail-dresses-dl" class="form-input" placeholder="รหัส..." value="' + item.clothesId + '" style="font-size:13px;" autocomplete="off">' +
+      '<div id="guide-' + item.tmpId + '" style="margin-top:4px;min-height:16px;"></div>' +
+      '</div>' +
+      '<div style="flex:1;min-width:0;">' +
+      '<label style="font-size:10px;color:var(--ink-muted);">ราคา</label>' +
+      '<input type="number" id="price-' + item.tmpId + '" class="form-input" placeholder="0" value="' + (item.price || '') + '" style="font-size:13px;">' +
+      '</div>' +
+      '<button type="button" onclick="removeDressItem(\'' + item.tmpId + '\')" style="background:white;color:#c74545;border:1px solid #ffd0d0;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;flex-shrink:0;margin-top:18px;"><i class=\"fa-solid fa-trash\"></i></button>' +
+      '</div>';
+    el.appendChild(row);
+    const codeInput = document.getElementById('code-' + item.tmpId);
+    const priceInput = document.getElementById('price-' + item.tmpId);
+    codeInput.addEventListener('input', function() {
+      item.clothesId = codeInput.value.trim().toUpperCase();
+      updateDressGuide(item.tmpId);
+    });
+    codeInput.addEventListener('change', function() {
+      item.clothesId = codeInput.value.trim().toUpperCase();
+      updateDressGuide(item.tmpId);
+    });
+    priceInput.addEventListener('input', function() {
+      item.price = Number(priceInput.value) || 0;
+      updateRentalTotal();
+    });
+    if (item.clothesId) updateDressGuide(item.tmpId);
+  });
+  const existing = el.querySelectorAll('[id^="dress-row-"]');
+  existing.forEach(function(rowEl) {
+    const tmpId = rowEl.id.replace('dress-row-', '');
+    if (!dressItems.find(function(d) { return d.tmpId === tmpId; })) rowEl.remove();
+  });
   updateRentalTotal();
 }
 
-function updateDressCode(tmpId, value) {
-  const item = dressItems.find(d => d.tmpId === tmpId);
+function updateDressGuide(tmpId) {
+  const item = dressItems.find(function(d) { return d.tmpId === tmpId; });
   if (!item) return;
-  item.clothesId = value.trim().toUpperCase();
-  // auto-fill ราคาจาก inventory ถ้ายังไม่ได้กรอกราคา
-  const d = inventory.find(i => i.id === item.clothesId);
-  if (d && (!item.price || item.price === 0)) {
-    item.price = Number(d.price) || 0;
+  const guideEl = document.getElementById('guide-' + tmpId);
+  const priceInput = document.getElementById('price-' + tmpId);
+  if (!guideEl) return;
+  const id = item.clothesId;
+  const d = inventory.find(function(i) { return i.id === id; });
+  if (d) {
+    if (!item.price || item.price === 0) {
+      item.price = Number(d.price) || 0;
+      if (priceInput) priceInput.value = item.price;
+      updateRentalTotal();
+    }
+    const groupItems = d.group_id ? inventory.filter(function(i) { return i.group_id === d.group_id; }) : null;
+    const statusColor = d.status === 'available' ? 'var(--green)' : 'var(--rose)';
+    const statusText = d.status === 'available' ? '✓ ว่าง' : d.status === 'rented' ? '✗ กำลังเช่า' : d.status;
+    let sizeHtml = '';
+    if (groupItems && groupItems.length > 1) {
+      const badges = groupItems.map(function(gi) {
+        const avail = gi.status === 'available';
+        const active = gi.id === id;
+        return '<span onclick="selectDressSize(\'' + tmpId + '\',\'' + gi.id + '\')" style="padding:3px 9px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;background:' + (active?'var(--rose)':avail?'var(--green-light)':'var(--rose-light)') + ';color:' + (active?'white':avail?'var(--green)':'var(--rose)') + ';border:' + (active?'2px solid var(--rose)':'none') + ';">' + gi.size + '</span>';
+      }).join('');
+      sizeHtml = '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">' + badges + '</div>';
+    }
+    guideEl.innerHTML = '<div style="font-size:10px;font-weight:600;color:var(--ink-muted);">' + d.name + ' · ไซส์ ' + d.size + ' · <span style="color:' + statusColor + ';">' + statusText + '</span></div><div style="font-size:10px;color:var(--rose);">ราคาปกติ ฿' + Number(d.price).toLocaleString() + '</div>' + sizeHtml;
+  } else if (id.length > 0) {
+    guideEl.innerHTML = '<div style="font-size:10px;color:#c74545;">ไม่พบชุด &quot;' + id + '&quot; ในคลัง</div>';
+  } else {
+    guideEl.innerHTML = '';
   }
-  renderDressItems();
 }
 
-function updateDressPrice(tmpId, value) {
-  const item = dressItems.find(d => d.tmpId === tmpId);
+function selectDressSize(tmpId, newId) {
+  const item = dressItems.find(function(d) { return d.tmpId === tmpId; });
   if (!item) return;
-  item.price = Number(value) || 0;
-  updateRentalTotal();
+  item.clothesId = newId;
+  const codeInput = document.getElementById('code-' + tmpId);
+  if (codeInput) codeInput.value = newId;
+  const d = inventory.find(function(i) { return i.id === newId; });
+  if (d) {
+    item.price = Number(d.price) || 0;
+    const priceInput = document.getElementById('price-' + tmpId);
+    if (priceInput) priceInput.value = item.price;
+    updateRentalTotal();
+  }
+  updateDressGuide(tmpId);
 }
+
+function updateDressCode(tmpId, value) {}
+function updateDressPrice(tmpId, value) {}
 
 function updateRentalTotal() {
   const total = dressItems.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
@@ -2040,6 +2142,7 @@ function openAddDress() {
   document.getElementById('dress-modal-title').textContent = 'เพิ่มชุดใหม่';
   document.getElementById('dress-submit-label').textContent = 'เพิ่มชุด';
   document.getElementById('d-id').disabled = false;
+  document.getElementById('d-group-id').value = '';
   document.getElementById('d-status-wrap').style.display = 'none';
   resetImgPreview();
   openModal('modal-dress');
@@ -2050,12 +2153,14 @@ function openEditDress(id) {
   if (!d) return;
   document.getElementById('d-mode').value = 'edit';
   document.getElementById('d-id').value = d.id;
-  document.getElementById('d-id').disabled = true;
+  document.getElementById('d-id').disabled = false;
+  document.getElementById('d-id').dataset.originalId = d.id;
   document.getElementById('d-name').value = d.name;
   document.getElementById('d-size').value = d.size;
   document.getElementById('d-price').value = d.price || 0;
   document.getElementById('d-cost').value = d.cost || 0;
   document.getElementById('d-image-url').value = d.image_url || '';
+  document.getElementById('d-group-id').value = d.group_id || '';
   document.getElementById('d-status-wrap').style.display = '';
   document.querySelectorAll('#d-status-picker .cond-option').forEach(o => {
     o.classList.toggle('selected', o.dataset.val === (d.status || 'available'));
@@ -2070,19 +2175,29 @@ function openEditDress(id) {
 async function submitDress(e) {
   e.preventDefault();
   const mode = document.getElementById('d-mode').value;
-  const id   = document.getElementById('d-id').value.trim().toUpperCase();
+  const newId = document.getElementById('d-id').value.trim().toUpperCase();
+  const originalId = document.getElementById('d-id').dataset.originalId || newId;
   const data = {
     name:      document.getElementById('d-name').value,
     size:      document.getElementById('d-size').value,
     price:     Number(document.getElementById('d-price').value || 0),
     cost:      Number(document.getElementById('d-cost').value || 0),
-    image_url: document.getElementById('d-image-url').value
+    image_url: document.getElementById('d-image-url').value,
+    group_id:  document.getElementById('d-group-id').value.trim().toUpperCase() || null
   };
   if (mode === 'edit') {
     const sel = document.querySelector('#d-status-picker .cond-option.selected');
     if (sel) data.status = sel.dataset.val;
+    // ถ้าเปลี่ยนรหัส ต้องเช็คซ้ำก่อน
+    if (newId !== originalId) {
+      if (inventory.find(i => i.id === newId)) {
+        showToast(`รหัส ${newId} มีอยู่แล้วในคลัง`, 'err');
+        return;
+      }
+      data.id = newId;
+    }
   } else {
-    data.id     = id;
+    data.id     = newId;
     data.status = 'available';
     data.rental_count  = 0;
     data.total_revenue = 0;
@@ -2090,7 +2205,11 @@ async function submitDress(e) {
   setLoading(true);
   try {
     if (mode === 'edit') {
-      await sbPatch('inventory', { id }, data);
+      await sbPatch('inventory', { id: originalId }, data);
+      // ถ้าเปลี่ยนรหัส ต้องอัพเดต clothes_id ใน rentals ด้วย
+      if (newId !== originalId) {
+        await sbPatch('rentals', { clothes_id: originalId }, { clothes_id: newId });
+      }
     } else {
       await sbPost('inventory', data);
     }

@@ -177,6 +177,8 @@
     .btn-submit { width: 100%; padding: 15px; background: linear-gradient(135deg, var(--rose) 0%, var(--rose-dark) 100%); color: white; border: none; border-radius: 14px; font-family: 'Prompt', sans-serif; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(200,114,106,0.4); transition: transform 0.15s; margin-top: 6px; }
     .btn-submit:active { transform: scale(0.98); }
     .btn-secondary { background: var(--cream); color: var(--ink); border: 1.5px solid rgba(200,114,106,0.2); padding: 12px; border-radius: 12px; font-family: 'Prompt', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; }
+    .sales-range-btn { padding: 6px 14px; background: var(--cream); color: var(--ink); border: 1px solid rgba(200,114,106,0.2); border-radius: 20px; font-family: 'Prompt', sans-serif; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .sales-range-btn.active { background: var(--rose); color: white; border-color: var(--rose); }
 
     /* Image upload preview */
     .img-upload-box { width: 100%; aspect-ratio: 16/10; background: var(--cream); border: 2px dashed rgba(200,114,106,0.3); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; gap: 6px; color: var(--ink-muted); font-size: 12px; overflow: hidden; position: relative; }
@@ -307,12 +309,57 @@
       <div class="section-header"><div class="section-heading">ประวัติการเช่าทั้งหมด</div></div>
       <div id="history-list"></div>
     </section>
+
+    <section id="sec-sales">
+      <div class="section-header"><div class="section-heading"><i class="fa-solid fa-chart-line" style="margin-right:6px;color:var(--rose);"></i>สรุปยอดขาย</div></div>
+      <!-- PIN GATE -->
+      <div id="sales-pin-gate" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 24px;gap:16px;">
+        <div style="width:56px;height:56px;background:var(--rose-light);border-radius:50%;display:flex;align-items:center;justify-content:center;">
+          <i class="fa-solid fa-lock" style="font-size:22px;color:var(--rose);"></i>
+        </div>
+        <div style="font-size:15px;font-weight:700;color:var(--ink);">ต้องใส่รหัสเพื่อดูยอดขาย</div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <input type="password" id="sales-pin-input" maxlength="10" class="form-input"
+            placeholder="รหัส PIN"
+            style="width:160px;text-align:center;font-size:18px;letter-spacing:4px;"
+            onkeydown="if(event.key==='Enter') verifySalesPin()">
+          <button onclick="verifySalesPin()" style="padding:12px 20px;background:var(--rose);color:white;border:none;border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">เข้าสู่ระบบ</button>
+        </div>
+        <div id="sales-pin-error" style="color:#c74545;font-size:12px;display:none;">รหัสไม่ถูกต้อง</div>
+      </div>
+      <!-- SALES CONTENT (hidden until PIN ok) -->
+      <div id="sales-content" style="display:none;">
+        <!-- date filter -->
+        <div style="background:white;border-radius:14px;padding:14px;margin-bottom:14px;border:1px solid rgba(200,114,106,0.08);box-shadow:var(--card-shadow);">
+          <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:10px;"><i class="fa-solid fa-calendar" style="margin-right:6px;color:var(--rose);"></i>เลือกช่วงวันที่</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+            <div>
+              <label style="font-size:10px;color:var(--ink-muted);">วันเริ่มต้น</label>
+              <input type="date" id="sales-date-from" class="form-input" onchange="renderSalesContent()">
+            </div>
+            <div>
+              <label style="font-size:10px;color:var(--ink-muted);">วันสิ้นสุด</label>
+              <input type="date" id="sales-date-to" class="form-input" onchange="renderSalesContent()">
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button onclick="setSalesRange('today')" class="sales-range-btn">วันนี้</button>
+            <button onclick="setSalesRange('week')" class="sales-range-btn">7 วัน</button>
+            <button onclick="setSalesRange('month')" class="sales-range-btn">เดือนนี้</button>
+            <button onclick="setSalesRange('year')" class="sales-range-btn">ปีนี้</button>
+            <button onclick="setSalesRange('all')" class="sales-range-btn">ทั้งหมด</button>
+          </div>
+        </div>
+        <div id="sales-summary"></div>
+      </div>
+    </section>
   </main>
 
   <nav class="bottom-nav">
     <button class="nav-btn active" id="nav-dashboard" onclick="switchSection('dashboard')"><i class="fa-solid fa-house"></i>หน้าหลัก</button>
     <button class="nav-btn" id="nav-inventory" onclick="switchSection('inventory')"><i class="fa-solid fa-shirt"></i>คลังชุด</button>
     <button class="nav-btn" id="nav-queue" onclick="switchSection('queue')"><i class="fa-solid fa-calendar-check"></i>เช็คคิว</button>
+    <button class="nav-btn" id="nav-sales" onclick="switchSection('sales')"><i class="fa-solid fa-chart-line"></i>ยอดขาย</button>
     <button class="nav-btn" id="nav-history" onclick="switchSection('history')"><i class="fa-solid fa-clock-rotate-left"></i>ประวัติ</button>
   </nav>
 </div>
@@ -361,20 +408,25 @@
         <button type="button" onclick="addDressItem()" style="width:100%;margin-top:8px;padding:10px;background:var(--cream);color:var(--rose-dark);border:1.5px dashed var(--rose);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Prompt',sans-serif;">
           <i class="fa-solid fa-plus" style="margin-right:6px;"></i>เพิ่มชุด
         </button>
+        <div id="rental-total-sum" style="margin-top:8px;padding:10px 12px;background:var(--cream);border-radius:8px;font-size:12px;color:var(--ink);"></div>
       </div>
 
       <!-- ยอดรวม -->
       <div class="form-row form-group">
         <div>
           <label class="form-label">ยอดรับเงิน (บาท)</label>
-          <input type="number" id="r-deposit" required class="form-input" placeholder="กรอกยอดจริง" value="">
+          <input type="number" id="r-deposit" required class="form-input" placeholder="กรอกยอดจริง" value="" oninput="this.dataset.auto='0'">
         </div>
         <div>
           <label class="form-label">ส่วนลด (บาท)</label>
-          <input type="number" id="r-discount" class="form-input" placeholder="0" value="0">
+          <input type="number" id="r-discount" class="form-input" placeholder="0" value="0" oninput="updateRentalTotal()">
         </div>
       </div>
       <button type="submit" class="btn-submit" style="margin-top:14px;"><i class="fa-solid fa-check" style="margin-right:6px;"></i>ยืนยันบันทึก</button>
+      <div class="form-group" style="margin-top:10px;">
+        <label class="form-label" style="color:var(--ink-muted);">แอดมินที่รับคิว (ไม่บังคับ)</label>
+        <input type="text" id="r-admin" class="form-input" placeholder="ชื่อแอดมิน..." style="font-size:13px;">
+      </div>
     </form>
   </div>
 </div>
@@ -698,8 +750,8 @@ async function refreshData() {
   document.getElementById('refresh-btn').classList.add('spinning');
   try {
     const [inv, rent] = await Promise.all([
-      sbGet('inventory', 'select=*&order=id.asc'),
-      sbGet('rentals',   'select=*&order=created_at.desc')
+      sbGet('inventory', 'select=*&order=id.asc&limit=10000'),
+      sbGet('rentals',   'select=*&order=created_at.desc&limit=10000')
     ]);
     inventory = inv.map(normalizeKeys);
     rentals   = rent.map(normalizeKeys);
@@ -728,7 +780,176 @@ function renderAll() {
   renderDashboard();
   renderInventory();
   renderHistory();
+  renderSales();
   if (document.getElementById('sec-queue').classList.contains('active')) onQueueChange();
+}
+
+/* ── SALES PIN ── */
+const SALES_PIN = '145000';
+let salesUnlocked = false;
+
+function verifySalesPin() {
+  const val = document.getElementById('sales-pin-input').value;
+  if (val === SALES_PIN) {
+    salesUnlocked = true;
+    document.getElementById('sales-pin-gate').style.display = 'none';
+    document.getElementById('sales-content').style.display = '';
+    // set default range = เดือนนี้
+    setSalesRange('month');
+  } else {
+    document.getElementById('sales-pin-error').style.display = '';
+    document.getElementById('sales-pin-input').value = '';
+    setTimeout(() => { document.getElementById('sales-pin-error').style.display = 'none'; }, 2000);
+  }
+}
+
+function setSalesRange(range) {
+  const today = getToday();
+  const d = new Date();
+  let from = '', to = today;
+  if (range === 'today')  { from = today; }
+  else if (range === 'week') { const w = new Date(d); w.setDate(w.getDate()-6); from = w.toISOString().slice(0,10); }
+  else if (range === 'month') { from = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; }
+  else if (range === 'year')  { from = `${d.getFullYear()}-01-01`; }
+  else if (range === 'all')   { from = '2020-01-01'; }
+  document.getElementById('sales-date-from').value = from;
+  document.getElementById('sales-date-to').value   = to;
+  document.querySelectorAll('.sales-range-btn').forEach(b => b.classList.remove('active'));
+  const map = {today:0,week:1,month:2,year:3,all:4};
+  const btns = document.querySelectorAll('.sales-range-btn');
+  if (map[range] !== undefined) btns[map[range]].classList.add('active');
+  renderSalesContent();
+}
+
+function renderSales() {
+  if (!salesUnlocked) return; // ไม่ทำอะไรถ้ายังไม่ unlock
+  renderSalesContent();
+}
+
+function renderSalesContent() {
+  const el = document.getElementById('sales-summary');
+  if (!el || !salesUnlocked) return;
+
+  const from = document.getElementById('sales-date-from')?.value || '';
+  const to   = document.getElementById('sales-date-to')?.value   || getToday();
+
+  // filter rentals ตาม date range (ใช้ created_at หรือ start)
+  const filtered = rentals.filter(r => {
+    const deposit = Number(r.deposit || 0) + Number(r.fine || 0);
+    if (deposit === 0) return false;
+    const dateStr = (r.created_at || r.start || '').slice(0, 10);
+    if (from && dateStr < from) return false;
+    if (to   && dateStr > to)   return false;
+    return true;
+  });
+
+  // สรุปยอด
+  const totalRevenue = filtered.reduce((s, r) => s + Number(r.deposit||0) + Number(r.fine||0), 0);
+  const bookingSet   = new Set(filtered.map(r => r.booking_id || r.rental_id));
+  const totalBookings = bookingSet.size;
+
+  // สรุปตามแอดมิน
+  const adminMap = {};
+  filtered.forEach(r => {
+    const key = r.admin_name || 'ไม่ระบุ';
+    if (!adminMap[key]) adminMap[key] = { revenue: 0, bookings: new Set() };
+    adminMap[key].revenue += Number(r.deposit||0) + Number(r.fine||0);
+    adminMap[key].bookings.add(r.booking_id || r.rental_id);
+  });
+
+  // กราฟรายวันใน range (ถ้า range ≤ 31 วัน)
+  const fromDate = from ? new Date(from) : null;
+  const toDate   = new Date(to);
+  const diffDays = fromDate ? Math.ceil((toDate - fromDate) / 86400000) + 1 : 0;
+  let chartHtml = '';
+  if (fromDate && diffDays <= 31) {
+    const dayMap = {};
+    filtered.forEach(r => {
+      const d = (r.created_at || r.start || '').slice(0,10);
+      dayMap[d] = (dayMap[d] || 0) + Number(r.deposit||0) + Number(r.fine||0);
+    });
+    const days = [];
+    for (let i = 0; i < diffDays; i++) {
+      const d = new Date(fromDate); d.setDate(d.getDate() + i);
+      const k = d.toISOString().slice(0,10);
+      days.push({ label: `${d.getDate()}`, amount: dayMap[k] || 0 });
+    }
+    const maxDay = Math.max(...days.map(d => d.amount), 1);
+    chartHtml = `
+      <div style="background:white;border-radius:14px;padding:16px;margin-bottom:14px;border:1px solid rgba(200,114,106,0.08);box-shadow:var(--card-shadow);">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;">ยอดรายวัน</div>
+        <div style="display:flex;align-items:flex-end;gap:${diffDays > 14 ? 3 : 6}px;height:100px;overflow-x:auto;">
+          ${days.map(d => {
+            const h = d.amount > 0 ? Math.max(4, (d.amount/maxDay)*80) : 2;
+            return `<div style="flex-shrink:0;${diffDays>14?'width:14px':'flex:1'};display:flex;flex-direction:column;align-items:center;gap:2px;">
+              <div style="width:100%;background:${d.amount>0?'var(--rose)':'rgba(200,114,106,0.1)'};height:${h}%;border-radius:4px 4px 0 0;"></div>
+              <div style="font-size:8px;color:var(--ink-muted);">${d.label}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  } else if (!fromDate || diffDays > 31) {
+    // กราฟ monthly
+    const todayObj = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d2 = new Date(todayObj.getFullYear(), todayObj.getMonth() - i, 1);
+      const k = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}`;
+      const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+      const amt = filtered.filter(r => (r.created_at||r.start||'').slice(0,7) === k)
+                          .reduce((s,r) => s + Number(r.deposit||0) + Number(r.fine||0), 0);
+      months.push({ label: monthNames[d2.getMonth()], amount: amt });
+    }
+    const maxM = Math.max(...months.map(m => m.amount), 1);
+    chartHtml = `
+      <div style="background:white;border-radius:14px;padding:16px;margin-bottom:14px;border:1px solid rgba(200,114,106,0.08);box-shadow:var(--card-shadow);">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;">ยอด 6 เดือนล่าสุด</div>
+        <div style="display:flex;align-items:flex-end;gap:8px;height:100px;">
+          ${months.map(m => {
+            const h = m.amount > 0 ? Math.max(4, (m.amount/maxM)*80) : 2;
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
+              <div style="font-size:8px;color:var(--ink-muted);">${m.amount>0?(m.amount>=1000?(m.amount/1000).toFixed(1)+'k':m.amount):''}</div>
+              <div style="width:100%;background:${m.amount>0?'var(--rose)':'rgba(200,114,106,0.1)'};height:${h}%;border-radius:4px 4px 0 0;"></div>
+              <div style="font-size:9px;color:var(--ink-muted);">${m.label}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  // admin breakdown
+  const adminRows = Object.entries(adminMap)
+    .sort((a,b) => b[1].revenue - a[1].revenue)
+    .map(([name, data]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(200,114,106,0.08);">
+        <div>
+          <div style="font-size:13px;font-weight:600;">${name}</div>
+          <div style="font-size:10px;color:var(--ink-muted);">${data.bookings.size} คิว</div>
+        </div>
+        <div style="font-size:14px;font-weight:700;color:var(--rose);">${CURRENCY}${data.revenue.toLocaleString()}</div>
+      </div>`).join('');
+
+  el.innerHTML = `
+    <!-- summary cards -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="background:linear-gradient(135deg,#fff5f0,#ffe8db);border-radius:14px;padding:14px;border:1px solid rgba(200,114,106,0.15);">
+        <div style="font-size:10px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.05em;">ยอดรวม</div>
+        <div style="font-size:22px;font-weight:700;color:var(--rose);margin-top:4px;">${CURRENCY}${totalRevenue.toLocaleString()}</div>
+        <div style="font-size:10px;color:var(--ink-muted);margin-top:2px;">${totalBookings} คิว</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:14px;padding:14px;border:1px solid rgba(80,160,100,0.15);">
+        <div style="font-size:10px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.05em;">เฉลี่ย/คิว</div>
+        <div style="font-size:22px;font-weight:700;color:var(--green);margin-top:4px;">${CURRENCY}${totalBookings > 0 ? Math.round(totalRevenue/totalBookings).toLocaleString() : 0}</div>
+        <div style="font-size:10px;color:var(--ink-muted);margin-top:2px;">${from||'ทั้งหมด'} ถึง ${to}</div>
+      </div>
+    </div>
+    ${chartHtml}
+    ${adminRows ? `
+    <div style="background:white;border-radius:14px;padding:16px;border:1px solid rgba(200,114,106,0.08);box-shadow:var(--card-shadow);">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;"><i class="fa-solid fa-user" style="margin-right:6px;color:var(--rose);"></i>ยอดแยกตามแอดมิน</div>
+      ${adminRows}
+    </div>` : ''}
+  `;
 }
 
 function renderDashboard() {
@@ -771,10 +992,11 @@ function renderGroupedCards(list, today) {
 
     const dressRows = items.map(r => {
       const d = inventory.find(i => i.id === r.clothes_id);
+      const price = Number(r.item_price || (d ? d.price : 0));
       return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid rgba(200,114,106,0.08);">
         <span class="dress-code" style="font-size:10px;">${r.clothes_id}</span>
         ${d ? `<span style="font-size:11px;color:var(--ink-muted);flex:1;">${d.name}</span>` : '<span style="flex:1;"></span>'}
-        ${d ? `<span style="font-size:11px;font-weight:700;color:var(--rose);">${CURRENCY}${Number(d.price).toLocaleString()}</span>` : ''}
+        ${price ? `<span style="font-size:11px;font-weight:700;color:var(--rose);">${CURRENCY}${price.toLocaleString()}</span>` : ''}
         <button onclick="openReturnModal('${r.rental_id}','${r.clothes_id}')" style="background:var(--ink);color:white;border:none;padding:3px 8px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;white-space:nowrap;">รับคืน</button>
       </div>`;
     }).join('');
@@ -951,15 +1173,21 @@ function renderHistory() {
     return;
   }
 
-  // จัดกลุ่มตาม booking_id
+  // จัดกลุ่มตาม booking_id แล้วเรียงล่าสุดขึ้นก่อน
   const bookingMap = {};
-  [...rentals].reverse().forEach(r => {
+  rentals.forEach(r => {
     const bid = r.booking_id || r.rental_id;
     if (!bookingMap[bid]) bookingMap[bid] = [];
     bookingMap[bid].push(r);
   });
+  // sort bookings โดยใช้ created_at ของ row ล่าสุดในแต่ละ booking
+  const sortedBookings = Object.entries(bookingMap).sort((a, b) => {
+    const aLatest = Math.max(...a[1].map(r => new Date(r.created_at || 0).getTime()));
+    const bLatest = Math.max(...b[1].map(r => new Date(r.created_at || 0).getTime()));
+    return bLatest - aLatest;
+  });
 
-  el.innerHTML = Object.entries(bookingMap).map(([bid, items]) => {
+  el.innerHTML = sortedBookings.map(([bid, items]) => {
     const first = items[0];
     const isActive = items.some(r => r.status === 'active');
     const allReturned = items.every(r => r.status === 'returned');
@@ -974,11 +1202,12 @@ function renderHistory() {
     // รายการชุดทั้งหมดใน booking
     const dressRows = items.map(r => {
       const d = inventory.find(i => i.id === r.clothes_id);
+      const price = Number(r.item_price || (d ? d.price : 0));
       const over = r.end < getToday();
       return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid rgba(200,114,106,0.08);">
         <span class="dress-code" style="font-size:10px;">${r.clothes_id}</span>
         ${d ? `<span style="font-size:11px;color:var(--ink-muted);flex:1;">${d.name}</span>` : '<span style="flex:1;"></span>'}
-        ${d ? `<span style="font-size:11px;font-weight:700;color:var(--rose);">${CURRENCY}${Number(d.price).toLocaleString()}</span>` : ''}
+        ${price ? `<span style="font-size:11px;font-weight:700;color:var(--rose);">${CURRENCY}${price.toLocaleString()}</span>` : ''}
         ${r.status === 'active' ? `<button onclick="openReturnModal('${r.rental_id}','${r.clothes_id}')" style="background:var(--ink);color:white;border:none;padding:3px 8px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;white-space:nowrap;">รับคืน</button>` : `<span style="font-size:9px;color:var(--green);font-weight:600;">✓ คืนแล้ว</span>`}
         ${over && r.status === 'active' ? `<span style="font-size:9px;color:#c74545;font-weight:700;">เกินกำหนด</span>` : ''}
       </div>`;
@@ -1172,17 +1401,18 @@ function changeCalMonth(delta) {
 }
 
 /* ── DRESS ITEMS (multi-dress form) ── */
-let dressItems = []; // [{id, tmpId}]
+let dressItems = []; // [{id, tmpId, price}]
 
 function addDressItem(clothesId = '') {
   const tmpId = 'di-' + Date.now() + '-' + Math.random().toString(36).slice(2);
-  dressItems.push({ tmpId, clothesId });
+  dressItems.push({ tmpId, clothesId, price: 0 });
   renderDressItems();
 }
 
 function removeDressItem(tmpId) {
   dressItems = dressItems.filter(d => d.tmpId !== tmpId);
   renderDressItems();
+  updateRentalTotal();
 }
 
 function renderDressItems() {
@@ -1190,37 +1420,67 @@ function renderDressItems() {
   if (!el) return;
   if (dressItems.length === 0) {
     el.innerHTML = `<div style="text-align:center;color:var(--ink-muted);font-size:12px;padding:10px;">ยังไม่มีชุด กด "+ เพิ่มชุด" ด้านล่าง</div>`;
+    updateRentalTotal();
     return;
   }
-  el.innerHTML = dressItems.map((item, idx) => {
+  el.innerHTML = dressItems.map((item) => {
     const d = inventory.find(i => i.id === item.clothesId);
-    const priceHint = d ? `<span style="font-size:10px;color:var(--rose);margin-left:6px;">฿${Number(d.price).toLocaleString()}</span>` : '';
-    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
-      <div style="flex:1;">
-        <input type="text" value="${item.clothesId}" list="avail-dresses-dl"
-          class="form-input" placeholder="รหัสชุด..."
-          oninput="updateDressItem('${item.tmpId}', this.value)"
-          style="font-size:13px;">
-        ${priceHint ? `<div style="margin-top:3px;">${priceHint}</div>` : ''}
+    const guide = d ? `<div style="font-size:10px;color:var(--rose);margin-top:2px;">ราคาปกติ ฿${Number(d.price).toLocaleString()}</div>` : '';
+    return `<div style="background:var(--cream);border-radius:10px;padding:10px;margin-bottom:8px;">
+      <div style="display:flex;gap:8px;align-items:flex-start;">
+        <div style="flex:1.5;min-width:0;">
+          <label style="font-size:10px;color:var(--ink-muted);">รหัสชุด</label>
+          <input type="text" value="${item.clothesId}" list="avail-dresses-dl"
+            class="form-input" placeholder="รหัส..."
+            oninput="updateDressCode('${item.tmpId}', this.value)"
+            style="font-size:13px;">
+          ${guide}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <label style="font-size:10px;color:var(--ink-muted);">ราคา</label>
+          <input type="number" value="${item.price || ''}" class="form-input" placeholder="0"
+            oninput="updateDressPrice('${item.tmpId}', this.value)" style="font-size:13px;">
+        </div>
+        <button type="button" onclick="removeDressItem('${item.tmpId}')"
+          style="background:white;color:#c74545;border:1px solid #ffd0d0;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;flex-shrink:0;margin-top:18px;">
+          <i class="fa-solid fa-trash"></i>
+        </button>
       </div>
-      <button type="button" onclick="removeDressItem('${item.tmpId}')"
-        style="background:#fff0f0;color:#c74545;border:1px solid #ffd0d0;padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;flex-shrink:0;">
-        <i class="fa-solid fa-trash"></i>
-      </button>
     </div>`;
   }).join('');
+  updateRentalTotal();
 }
 
-function updateDressItem(tmpId, value) {
+function updateDressCode(tmpId, value) {
   const item = dressItems.find(d => d.tmpId === tmpId);
-  if (item) {
-    item.clothesId = value.trim().toUpperCase();
-    // อัพเดต price hint โดยไม่ re-render ทั้งหมด
-    const d = inventory.find(i => i.id === item.clothesId);
-    const inputEl = document.querySelector(`input[oninput*="${tmpId}"]`);
-    if (inputEl && inputEl.nextElementSibling) {
-      inputEl.nextElementSibling.innerHTML = d ? `<span style="font-size:10px;color:var(--rose);margin-left:6px;">฿${Number(d.price).toLocaleString()}</span>` : '';
-    }
+  if (!item) return;
+  item.clothesId = value.trim().toUpperCase();
+  // auto-fill ราคาจาก inventory ถ้ายังไม่ได้กรอกราคา
+  const d = inventory.find(i => i.id === item.clothesId);
+  if (d && (!item.price || item.price === 0)) {
+    item.price = Number(d.price) || 0;
+  }
+  renderDressItems();
+}
+
+function updateDressPrice(tmpId, value) {
+  const item = dressItems.find(d => d.tmpId === tmpId);
+  if (!item) return;
+  item.price = Number(value) || 0;
+  updateRentalTotal();
+}
+
+function updateRentalTotal() {
+  const total = dressItems.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+  const discount = Number(document.getElementById('r-discount')?.value || 0);
+  const net = Math.max(0, total - discount);
+  const sumEl = document.getElementById('rental-total-sum');
+  if (sumEl) sumEl.innerHTML = `รวม ${dressItems.length} ชุด: <strong>${CURRENCY}${total.toLocaleString()}</strong>${discount>0?` − ส่วนลด ${CURRENCY}${discount.toLocaleString()}`:''} = <strong style="color:var(--rose);">${CURRENCY}${net.toLocaleString()}</strong>`;
+  // auto-fill deposit ถ้ายังไม่ได้กรอก
+  const depEl = document.getElementById('r-deposit');
+  if (depEl && (!depEl.value || depEl.dataset.auto === '1')) {
+    depEl.value = net;
+    depEl.dataset.auto = '1';
   }
 }
 
@@ -1256,6 +1516,7 @@ async function submitNewRental(e) {
   const discount = Number(document.getElementById('r-discount').value || 0);
   const start    = document.getElementById('r-start').value;
   const end      = document.getElementById('r-end').value;
+  const admin_name = (document.getElementById('r-admin')?.value || '').trim();
   const booking_id = 'B-' + Date.now();
 
   setLoading(true);
@@ -1269,7 +1530,9 @@ async function submitNewRental(e) {
         customer, phone, start, end,
         discount: validItems.indexOf(item) === 0 ? discount : 0,
         deposit:  validItems.indexOf(item) === 0 ? deposit  : 0,
-        delivery, address, status: 'active'
+        item_price: Number(item.price) || 0,
+        delivery, address, status: 'active',
+        admin_name: admin_name || null
       });
       await sbPatch('inventory', { id: item.clothesId }, { status: 'rented' });
     }
@@ -1289,6 +1552,7 @@ async function submitNewRental(e) {
     await refreshData();
     closeModal('modal-rental');
     document.getElementById('form-rental').reset();
+    if (document.getElementById('r-admin')) document.getElementById('r-admin').value = '';
     dressItems = [];
     renderDressItems();
     document.querySelectorAll('#delivery-picker .cond-option').forEach((o,i) => o.classList.toggle('selected', i === 0));
@@ -1452,7 +1716,7 @@ function showReceiptByBooking(bookingId) {
 
   const dressRows = bookingRentals.map(r => {
     const d = inventory.find(i => i.id === r.clothes_id);
-    const price = d ? Number(d.price) : 0;
+    const price = Number(r.item_price || (d ? d.price : 0));
     return `<div style="display:flex;justify-content:space-between;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #f5ebe8;">
       <div>
         <strong style="font-size:12px;">${d ? d.name : r.clothes_id}</strong>
@@ -1504,8 +1768,8 @@ function showReceiptByBooking(bookingId) {
       <div style="text-align:center;font-size:10px;color:var(--ink-muted);margin-top:16px;padding-top:12px;border-top:1px dashed rgba(200,114,106,0.2);">ขอบคุณที่ใช้บริการ TAPA Rental</div>
     </div>`;
 
-  document.getElementById('receipt-content').innerHTML = html;
-  document.getElementById('modal-receipt').style.display = 'flex';
+  document.getElementById('receipt-body').innerHTML = html;
+  openModal('modal-receipt');
 }
 
 /* ── RECEIPT ── */
@@ -1875,6 +2139,7 @@ function switchSection(id) {
   if (id === 'inventory') renderInventory();
   if (id === 'history')   renderHistory();
   if (id === 'queue')     onQueueChange();
+  if (id === 'sales')     renderSales();
 }
 
 function openModal(id) {

@@ -329,7 +329,7 @@
         <div style="font-size:15px;font-weight:700;color:var(--ink);">ต้องใส่รหัสเพื่อดูยอดขาย</div>
         <div style="display:flex;gap:10px;align-items:center;">
           <input type="password" id="sales-pin-input" maxlength="10" class="form-input"
-            placeholder="รหัส PIN"
+            placeholder="รหัส PIN" inputmode="numeric" pattern="[0-9]*"
             style="width:160px;text-align:center;font-size:18px;letter-spacing:4px;"
             onkeydown="if(event.key==='Enter') verifySalesPin()">
           <button onclick="verifySalesPin()" style="padding:12px 20px;background:var(--rose);color:white;border:none;border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">เข้าสู่ระบบ</button>

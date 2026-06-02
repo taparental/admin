@@ -957,7 +957,7 @@ function printAccountingSummary() {
   openPrintWindow(summaryPage, `ตารางสรุปยอดขาย ${from} - ${to}`, true);
 }
 
-// รวมใบเสร็จทุกใบในช่วง (customer หรือ account) — 1 ใบ/หน้า A4
+// รวมใบเสร็จ + สำเนาบัตร เป็นชุดต่อลูกค้า (สำหรับบัญชี)
 function printAllReceipts(copyType) {
   const from = document.getElementById('sales-date-from')?.value || '';
   const to   = document.getElementById('sales-date-to')?.value   || getToday();
@@ -971,13 +971,66 @@ function printAllReceipts(copyType) {
     if (!seen.has(bid)) { seen.add(bid); bookingIds.push(bid); }
   });
 
+  if (copyType === 'customer') {
+    // สำหรับลูกค้า — ใบเสร็จอย่างเดียว
+    let pages = '';
+    bookingIds.forEach(bid => {
+      pages += `<div style="page-break-after:always;padding:8mm;">${buildReceiptHtml(bid, 'customer')}</div>`;
+    });
+    openPrintWindow(pages, `ใบเสร็จสำหรับลูกค้า ${from} - ${to}`, true);
+    return;
+  }
+
+  if (copyType === 'account') {
+    // สำหรับบัญชี — ใบเสร็จอย่างเดียว
+    let pages = '';
+    bookingIds.forEach(bid => {
+      pages += `<div style="page-break-after:always;padding:8mm;">${buildReceiptHtml(bid, 'account')}</div>`;
+    });
+    openPrintWindow(pages, `ใบเสร็จสำหรับบัญชี ${from} - ${to}`, true);
+    return;
+  }
+
+  // account-paired — ใบเสร็จบัญชี + สำเนาบัตร คู่กันต่อลูกค้า
   let pages = '';
   bookingIds.forEach(bid => {
-    pages += `<div style="page-break-after:always;padding:8mm;">${buildReceiptHtml(bid, copyType)}</div>`;
+    const r = rentals.find(x => (x.booking_id||x.rental_id) === bid);
+    const receiptHtml = buildReceiptHtml(bid, 'account');
+    const dateStr = (r?.created_at || r?.start || '').slice(0,10);
+    const orderNum = ('RE' + bid.replace(/\D/g,'')).slice(0,8).padEnd(8,'0');
+
+    // ใบเสร็จบัญชี
+    pages += `<div style="page-break-after:always;padding:8mm;">${receiptHtml}</div>`;
+
+    // สำเนาบัตร (ถ้ามี)
+    if (r?.id_card_url && r.id_card_url.startsWith('http')) {
+      pages += `<div style="page-break-after:always;font-family:'Sarabun','Prompt',sans-serif;color:#000;padding:20mm 15mm;text-align:center;">
+        <div style="font-size:18px;font-weight:700;line-height:1.8;margin-bottom:30px;">
+          ${r.customer || ''}<br>
+          ${formatDate(dateStr)}<br>
+          ${orderNum}
+        </div>
+        <div style="position:relative;display:inline-block;max-width:520px;">
+          <img src="${r.id_card_url}" style="max-width:100%;max-height:340px;border:1px solid #999;">
+          
+        </div>
+      </div>`;
+    } else {
+      // ไม่มีรูปบัตร — หน้าว่างพร้อมหมายเหตุ
+      pages += `<div style="page-break-after:always;font-family:'Sarabun','Prompt',sans-serif;color:#000;padding:20mm 15mm;text-align:center;">
+        <div style="font-size:18px;font-weight:700;line-height:1.8;margin-bottom:20px;">
+          ${r?.customer || ''}<br>
+          ${formatDate(dateStr)}<br>
+          ${orderNum}
+        </div>
+        <div style="border:2px dashed #ccc;padding:40px;border-radius:12px;color:#aaa;font-size:14px;">
+          ไม่มีรูปบัตรประชาชน
+        </div>
+      </div>`;
+    }
   });
 
-  const label = copyType === 'account' ? 'ใบเสร็จสำหรับบัญชี' : 'ใบเสร็จสำหรับลูกค้า';
-  openPrintWindow(pages, `${label} ${from} - ${to}`, true);
+  openPrintWindow(pages, `ชุดเอกสารบัญชี ${from} - ${to}`, true);
 }
 
 function printIdCardSummary() {
@@ -1006,7 +1059,7 @@ function printIdCardSummary() {
       </div>
       <div style="position:relative;display:inline-block;max-width:520px;">
         <img src="${c.url}" style="max-width:100%;max-height:340px;border:1px solid #999;">
-        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-18deg);font-size:22px;color:rgba(200,60,60,0.4);font-weight:700;white-space:nowrap;">สำเนาถูกต้อง ใช้เช่าชุดเท่านั้น</div>
+        
       </div>
     </div>`;
   });
@@ -1149,7 +1202,8 @@ function renderSalesContent() {
       <button onclick="printAccountingSummary()" style="width:100%;margin-bottom:8px;padding:12px;background:var(--ink);color:white;border:none;border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-table-list" style="margin-right:6px;"></i>ตารางสรุปยอดขาย</button>
       <button onclick="printAllReceipts('customer')" style="width:100%;margin-bottom:8px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-receipt" style="margin-right:6px;color:var(--rose);"></i>รวมใบเสร็จ (สำหรับลูกค้า)</button>
       <button onclick="printAllReceipts('account')" style="width:100%;margin-bottom:8px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-file-invoice" style="margin-right:6px;color:var(--rose);"></i>รวมใบเสร็จ (สำหรับบัญชี)</button>
-      <button onclick="printIdCardSummary()" style="width:100%;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-id-card" style="margin-right:6px;color:var(--rose);"></i>รวมสำเนาบัตรประชาชน</button>
+      <button onclick="printIdCardSummary()" style="width:100%;margin-bottom:8px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-id-card" style="margin-right:6px;color:var(--rose);"></i>รวมสำเนาบัตรประชาชน</button>
+      <button onclick="printAllReceipts('account-paired')" style="width:100%;padding:12px;background:var(--ink);color:white;border:none;border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>รวมใบเสร็จ + สำเนาบัตร (ชุดส่งบัญชี)</button>
     </div>
   `;
 }

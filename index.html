@@ -306,7 +306,7 @@
     </div>
     <div id="cp-body"></div>
   </div>
-  <input type="file" id="cp-id-file" accept="image/*" capture="environment" style="display:none;" onchange="cpUpload(this,'id')">
+  <input type="file" id="cp-id-file" accept="image/*" style="display:none;" onchange="cpUpload(this,'id')">
   <input type="file" id="cp-slip-file" accept="image/*" style="display:none;" onchange="cpUpload(this,'slip')">
 </div>
 
@@ -1501,6 +1501,9 @@ function renderGroupedCards(list, today) {
           <div class="card-customer" style="margin-bottom:2px;">${first.customer}${delIcon}</div>
           <div class="date-highlight${over?' date-overdue':''}" style="font-size:11px;">${formatDate(first.start)} → ${formatDate(first.end)}${over?'<span class="tag-overdue"><i class="fa-solid fa-triangle-exclamation"></i> เกินกำหนด</span>':''}</div>
           ${first.deposit ? `<div style="font-size:13px;font-weight:700;color:var(--rose);margin-top:2px;">${CURRENCY}${Number(first.deposit).toLocaleString()}</div>` : ''}
+          ${first.payment_status === 'paid'
+            ? `<div style="margin-top:4px;"><span style="display:inline-flex;align-items:center;gap:4px;background:var(--green-light);color:var(--green);font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;"><i class="fa-solid fa-circle-check"></i>ชำระแล้ว</span></div>`
+            : `<div style="margin-top:4px;"><span style="display:inline-flex;align-items:center;gap:4px;background:var(--gold-light);color:#9a6e1a;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;"><i class="fa-solid fa-clock"></i>รอชำระ</span></div>`}
         </div>
         <div style="display:flex;gap:5px;align-items:center;">
           <button onclick="event.stopPropagation();copyCustomerLink('${bid}')" title="คัดลอกลิงก์ให้ลูกค้า" style="background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.2);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-link"></i></button>
@@ -3194,12 +3197,47 @@ function renderCustomerForm(rows) {
 
     <div class="cp-card">
       <h3><i class="fa-solid fa-id-card"></i>รูปบัตรประชาชน <span class="cp-required">*</span></h3>
+      <div style="background:#fff8f0;border:1px solid rgba(200,114,106,0.2);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--ink);">
+        <div style="font-weight:700;margin-bottom:6px;color:var(--rose-dark);"><i class="fa-solid fa-circle-info" style="margin-right:5px;"></i>ข้อควรปฏิบัติ</div>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          <div><i class="fa-solid fa-check" style="color:var(--green);margin-right:6px;width:14px;"></i>ถ่ายให้เห็นหน้าบัตรด้านหน้าชัดเจน</div>
+          <div><i class="fa-solid fa-check" style="color:var(--green);margin-right:6px;width:14px;"></i>ตัวเลขบัตรและชื่อต้องอ่านออก</div>
+          <div><i class="fa-solid fa-check" style="color:var(--green);margin-right:6px;width:14px;"></i>ไม่ปิดบังข้อมูลใดๆ บนบัตร</div>
+          <div><i class="fa-solid fa-xmark" style="color:var(--rose);margin-right:6px;width:14px;"></i>ไม่ถ่ายมืด / เบลอ / หน้าเอียง</div>
+        </div>
+      </div>
       <div class="cp-upload" id="cp-id-box" onclick="document.getElementById('cp-id-file').click()">
-        <i class="fa-solid fa-camera"></i>
-        <div class="t">ถ่ายรูป / เลือกรูปบัตรประชาชน</div>
-        <div class="s">เพื่อยืนยันตัวตนในการเช่า</div>
+        <i class="fa-solid fa-id-card"></i>
+        <div class="t">ถ่ายรูป หรือ เลือกรูปจากเครื่อง</div>
+        <div class="s">บัตรประชาชนด้านหน้า — ต้องเห็นข้อมูลชัดเจน</div>
       </div>
       <img id="cp-id-preview" class="cp-preview" style="display:none;">
+    </div>
+
+    <div class="cp-card">
+      <h3><i class="fa-solid fa-building-columns"></i>ข้อมูลการโอนเงิน</h3>
+      <div style="background:var(--cream);border-radius:12px;padding:14px 16px;margin-bottom:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:11px;color:var(--ink-muted);">ธนาคาร</span>
+          <span style="font-size:13px;font-weight:700;color:var(--ink);">UOB</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:11px;color:var(--ink-muted);">ชื่อบัญชี</span>
+          <span style="font-size:12px;font-weight:600;color:var(--ink);text-align:right;max-width:60%;">บจก.ทะพา ทำอะไรก็รวย</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:11px;color:var(--ink-muted);">เลขบัญชี</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:16px;font-weight:800;color:var(--ink);letter-spacing:1px;" id="cp-acc-no">8601785390</span>
+            <button onclick="cpCopyAccount()" style="background:var(--ink);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;display:flex;align-items:center;gap:5px;" id="cp-copy-btn">
+              <i class="fa-solid fa-copy"></i> คัดลอก
+            </button>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:20px;font-weight:800;color:var(--rose);padding:8px 0 4px;">
+        ยอดโอน ${CURRENCY}${total.toLocaleString()}
+      </div>
     </div>
 
     <div class="cp-card">
@@ -3279,8 +3317,26 @@ async function cpUpload(inputEl, kind) {
   }
 }
 
+async function cpCopyAccount() {
+  const acc = '8601785390';
+  let ok = false;
+  try { await navigator.clipboard.writeText(acc); ok = true; } catch(e) {}
+  if (!ok) {
+    const ta = document.createElement('textarea');
+    ta.value = acc; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); ok = true; } catch(e) {}
+    document.body.removeChild(ta);
+  }
+  const btn = document.getElementById('cp-copy-btn');
+  if (btn) {
+    btn.innerHTML = '<i class="fa-solid fa-check"></i> คัดลอกแล้ว';
+    btn.style.background = 'var(--green)';
+    setTimeout(() => { btn.innerHTML = '<i class="fa-solid fa-copy"></i> คัดลอก'; btn.style.background = 'var(--ink)'; }, 2000);
+  }
+  showToast(ok ? 'คัดลอกเลขบัญชีแล้ว ✓' : 'เลขบัญชี: ' + acc, ok ? 'ok' : 'warn');
+}
+
 async function submitCustomerInfo() {
-  if (!_cpIdUrl)   { showToast('กรุณาอัปโหลดรูปบัตรประชาชน', 'warn'); return; }
   if (!_cpSlipUrl) { showToast('กรุณาอัปโหลดสลิปโอนเงิน', 'warn'); return; }
   let address = '';
   if (_cpDelivery === 'mail' || _cpDelivery === 'parcel') {

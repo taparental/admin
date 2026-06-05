@@ -310,6 +310,50 @@
   <input type="file" id="cp-slip-file" accept="image/*" style="display:none;" onchange="cpUpload(this,'slip')">
 </div>
 
+<!-- ════════ CONFIRM MODAL (ใช้แทน confirm() ของเบราว์เซอร์) ════════ -->
+<div id="modal-confirm" class="modal-overlay" onclick="handleOverlayClick(event,'modal-confirm')" style="z-index:1300;">
+  <div class="modal-sheet" style="max-width:360px;">
+    <div style="padding:22px 8px 10px;text-align:center;">
+      <div id="confirm-icon" style="width:52px;height:52px;border-radius:50%;background:rgba(199,69,69,0.12);color:#c74545;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 14px;">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <div id="confirm-msg" style="font-size:14px;color:var(--ink);line-height:1.6;"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button onclick="resolveConfirm(false)" style="flex:1;padding:13px;background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.25);border-radius:12px;font-family:'Prompt',sans-serif;font-size:14px;font-weight:600;cursor:pointer;">ยกเลิก</button>
+      <button id="confirm-ok-btn" onclick="resolveConfirm(true)" style="flex:1;padding:13px;background:#c74545;color:white;border:none;border-radius:12px;font-family:'Prompt',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">ยืนยัน</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════ SHARE LINK MODAL (หลังลงคิวสำเร็จ) ════════ -->
+<div id="modal-share-link" class="modal-overlay" onclick="handleOverlayClick(event,'modal-share-link')" style="z-index:1200;">
+  <div class="modal-sheet" style="max-width:420px;">
+    <div style="text-align:center;padding:8px 0 16px;">
+      <div style="width:56px;height:56px;border-radius:50%;background:var(--green-light);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px;">
+        <i class="fa-solid fa-check"></i>
+      </div>
+      <div style="font-size:16px;font-weight:700;color:var(--ink);margin-bottom:4px;">บันทึกคิวสำเร็จแล้ว!</div>
+      <div style="font-size:12px;color:var(--ink-muted);">คัดลอกลิงก์ด้านล่างส่งให้ลูกค้ากรอกข้อมูล</div>
+    </div>
+    <div style="background:var(--cream);border-radius:12px;padding:12px 14px;margin-bottom:12px;">
+      <div style="font-size:10px;color:var(--ink-muted);margin-bottom:6px;font-weight:600;">ลิงก์สำหรับลูกค้า</div>
+      <div id="share-link-text" style="font-size:11px;color:var(--ink);word-break:break-all;background:white;padding:8px 10px;border-radius:8px;border:1px solid rgba(200,114,106,0.2);margin-bottom:10px;"></div>
+      <button onclick="doShareLinkCopy()" id="share-copy-btn" style="width:100%;padding:13px;background:var(--ink);color:white;border:none;border-radius:12px;font-family:'Prompt',sans-serif;font-size:14px;font-weight:700;cursor:pointer;">
+        <i class="fa-solid fa-copy" style="margin-right:7px;"></i>คัดลอกลิงก์
+      </button>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="doShareLinkReceipt()" style="flex:1;padding:11px;background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.25);border-radius:12px;font-family:'Prompt',sans-serif;font-size:13px;cursor:pointer;">
+        <i class="fa-solid fa-receipt" style="margin-right:5px;color:var(--rose);"></i>ดูใบเสร็จ
+      </button>
+      <button onclick="closeModal('modal-share-link')" style="flex:1;padding:11px;background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.25);border-radius:12px;font-family:'Prompt',sans-serif;font-size:13px;cursor:pointer;">
+        <i class="fa-solid fa-xmark" style="margin-right:5px;"></i>ปิด
+      </button>
+    </div>
+  </div>
+</div>
+
 <div id="app">
   <header class="header">
     <div class="header-top">
@@ -463,34 +507,7 @@
     </div>
     <form id="form-rental" onsubmit="submitNewRental(event)">
 
-      <!-- Section 1: ลูกค้า -->
-      <div style="background:var(--cream);border-radius:12px;padding:12px 14px;margin-bottom:10px;">
-        <div style="font-size:10px;font-weight:700;color:var(--rose-dark);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;"><i class="fa-solid fa-user" style="margin-right:5px;"></i>ข้อมูลลูกค้า</div>
-        <div class="form-row" style="margin-bottom:8px;">
-          <div><label class="form-label">ชื่อลูกค้า</label><input type="text" id="r-customer" required class="form-input" placeholder="ชื่อ-นามสกุล"></div>
-          <div><label class="form-label">เบอร์โทร</label><input type="tel" id="r-phone" class="form-input" placeholder="08x-xxx-xxxx"></div>
-        </div>
-        <div class="form-row">
-          <div><label class="form-label">วันที่รับ</label><input type="date" id="r-start" required class="form-input"></div>
-          <div><label class="form-label">วันที่คืน</label><input type="date" id="r-end" required class="form-input"></div>
-        </div>
-      </div>
-
-      <!-- Section 2: วิธีรับ -->
-      <div style="background:var(--cream);border-radius:12px;padding:12px 14px;margin-bottom:10px;">
-        <div style="font-size:10px;font-weight:700;color:var(--rose-dark);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;"><i class="fa-solid fa-truck-fast" style="margin-right:5px;"></i>วิธีรับชุด</div>
-        <div class="cond-group" id="delivery-picker">
-          <div class="cond-option selected" data-val="pickup"><i class="fa-solid fa-store" style="margin-right:4px;"></i>รับเอง</div>
-          <div class="cond-option" data-val="mail"><i class="fa-solid fa-truck-fast" style="margin-right:4px;"></i>ส่งแมส</div>
-          <div class="cond-option" data-val="parcel"><i class="fa-solid fa-box" style="margin-right:4px;"></i>ส่งพัสดุ</div>
-        </div>
-        <div id="address-wrap" style="display:none;margin-top:8px;">
-          <label class="form-label">ที่อยู่จัดส่ง</label>
-          <textarea id="r-address" class="form-textarea" placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์"></textarea>
-        </div>
-      </div>
-
-      <!-- Section 3: รายการชุด -->
+      <!-- Section 1: รายการชุด -->
       <div style="background:var(--cream);border-radius:12px;padding:12px 14px;margin-bottom:10px;">
         <div style="font-size:10px;font-weight:700;color:var(--rose-dark);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;"><i class="fa-solid fa-shirt" style="margin-right:5px;"></i>รายการชุด</div>
         <div id="dress-items-list"></div>
@@ -500,44 +517,64 @@
         <div id="rental-total-sum" style="margin-top:8px;padding:8px 10px;background:white;border-radius:8px;font-size:12px;color:var(--ink);border:1px solid rgba(200,114,106,0.15);"></div>
       </div>
 
-      <!-- Section 4: ชำระเงิน -->
+      <!-- Section 2: วันที่ + ราคา -->
       <div style="background:var(--cream);border-radius:12px;padding:12px 14px;margin-bottom:10px;">
-        <div style="font-size:10px;font-weight:700;color:var(--rose-dark);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;"><i class="fa-solid fa-money-bill-wave" style="margin-right:5px;"></i>การชำระเงิน</div>
+        <div style="font-size:10px;font-weight:700;color:var(--rose-dark);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;"><i class="fa-solid fa-calendar-days" style="margin-right:5px;"></i>คิว + ราคา</div>
         <div class="form-row" style="margin-bottom:8px;">
+          <div><label class="form-label">วันที่รับ</label><input type="date" id="r-start" required class="form-input"></div>
+          <div><label class="form-label">วันที่คืน</label><input type="date" id="r-end" required class="form-input"></div>
+        </div>
+        <div class="form-row">
           <div><label class="form-label">ยอดรับเงิน (฿)</label><input type="number" id="r-deposit" required class="form-input" placeholder="0" value="" oninput="this.dataset.auto='0'"></div>
           <div><label class="form-label">ส่วนลด (฿)</label><input type="number" id="r-discount" class="form-input" placeholder="0" value="0" oninput="updateRentalTotal()"></div>
         </div>
-        <div class="cond-group" id="payment-picker">
-          <div class="cond-option selected" data-val="cash"><i class="fa-solid fa-money-bill-wave" style="margin-right:4px;"></i>เงินสด</div>
-          <div class="cond-option" data-val="transfer"><i class="fa-solid fa-building-columns" style="margin-right:4px;"></i>โอน</div>
+      </div>
+
+      <!-- Section 3: ชื่อแอดมิน -->
+      <div style="background:var(--cream);border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+        <div style="font-size:10px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;"><i class="fa-solid fa-user-shield" style="margin-right:5px;"></i>แอดมิน</div>
+        <input type="text" id="r-admin" class="form-input" placeholder="ชื่อแอดมินที่รับคิว..." style="font-size:13px;">
+        <input type="hidden" id="r-idcard-url" value="">
+      </div>
+
+      <!-- Section 4: กรอกข้อมูลลูกค้าเอง (ไม่บังคับ) -->
+      <div style="background:var(--cream);border-radius:12px;padding:12px 14px;margin-bottom:10px;">
+        <div onclick="toggleAdminCustFields()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+          <span style="font-size:10px;font-weight:700;color:var(--rose-dark);text-transform:uppercase;letter-spacing:.06em;"><i class="fa-solid fa-pen-to-square" style="margin-right:5px;"></i>กรอกข้อมูลลูกค้าเอง (ไม่บังคับ)</span>
+          <i id="adm-cust-chevron" class="fa-solid fa-chevron-down" style="color:var(--rose);font-size:12px;"></i>
+        </div>
+        <div id="adm-cust-fields" style="display:none;margin-top:10px;">
+          <div style="font-size:10px;color:var(--ink-muted);margin-bottom:8px;">กรอกถ้าลูกค้าจ่ายหน้าร้าน/ไม่ต้องส่งลิงก์ — ถ้าเว้นว่างไว้ ลูกค้าจะกรอกเองผ่านลิงก์</div>
+          <div class="form-row" style="margin-bottom:8px;">
+            <div><label class="form-label">ชื่อลูกค้า</label><input type="text" id="r-customer" class="form-input" placeholder="ชื่อ-นามสกุล"></div>
+            <div><label class="form-label">เบอร์โทร</label><input type="tel" id="r-phone" class="form-input" placeholder="08x-xxx-xxxx"></div>
+          </div>
+          <label class="form-label">วิธีรับชุด</label>
+          <div class="cond-group" id="delivery-picker" style="margin-bottom:8px;">
+            <div class="cond-option selected" data-val="pickup"><i class="fa-solid fa-store" style="margin-right:4px;"></i>รับเอง</div>
+            <div class="cond-option" data-val="mail"><i class="fa-solid fa-truck-fast" style="margin-right:4px;"></i>ส่งแมส</div>
+            <div class="cond-option" data-val="parcel"><i class="fa-solid fa-box" style="margin-right:4px;"></i>ส่งพัสดุ</div>
+          </div>
+          <div id="address-wrap" style="display:none;margin-bottom:8px;">
+            <label class="form-label">ที่อยู่จัดส่ง</label>
+            <textarea id="r-address" class="form-textarea" placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์"></textarea>
+          </div>
+          <label class="form-label">การชำระเงิน</label>
+          <div class="cond-group" id="payment-picker">
+            <div class="cond-option selected" data-val="transfer"><i class="fa-solid fa-building-columns" style="margin-right:4px;"></i>เงินโอน (RE)</div>
+            <div class="cond-option" data-val="cash"><i class="fa-solid fa-money-bill-wave" style="margin-right:4px;"></i>เงินสด (CS)</div>
+          </div>
         </div>
       </div>
 
-      <!-- Section 5: แอดมิน + บัตร (compact) -->
-      <div style="background:var(--cream);border-radius:12px;padding:12px 14px;margin-bottom:12px;">
-        <div style="font-size:10px;font-weight:700;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">ข้อมูลเพิ่มเติม (ไม่บังคับ)</div>
-        <div class="form-row">
-          <div>
-            <label class="form-label">แอดมินที่รับคิว</label>
-            <input type="text" id="r-admin" class="form-input" placeholder="ชื่อแอดมิน..." style="font-size:13px;">
-          </div>
-          <div>
-            <label class="form-label">รูปบัตร ปชช.</label>
-            <input type="file" id="idcard-file" accept="image/*" style="display:none;" onchange="uploadIdCard(event)">
-            <input type="hidden" id="r-idcard-url" value="">
-            <div id="idcard-upload-box" onclick="document.getElementById('idcard-file').click()"
-              style="border:1.5px dashed var(--rose);border-radius:10px;padding:0;text-align:center;cursor:pointer;background:white;min-height:44px;display:flex;align-items:center;justify-content:center;">
-              <div id="idcard-placeholder" style="display:flex;align-items:center;gap:6px;padding:10px;">
-                <i class="fa-solid fa-id-card" style="font-size:16px;color:var(--rose);"></i>
-                <span style="font-size:11px;color:var(--ink-muted);">แตะอัพรูป</span>
-              </div>
-              <img id="idcard-preview" style="display:none;max-width:100%;max-height:80px;border-radius:8px;padding:4px;">
-            </div>
-          </div>
-        </div>
+      <div style="background:rgba(200,114,106,0.08);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--ink-muted);display:flex;align-items:flex-start;gap:8px;">
+        <i class="fa-solid fa-circle-info" style="color:var(--rose);margin-top:1px;flex-shrink:0;"></i>
+        <span>ถ้าไม่กรอกข้อมูลลูกค้า ลูกค้าจะกรอก <strong>ชื่อ เบอร์ วิธีรับ บัตร ปชช. และสลิป</strong> เองผ่านลิงก์ที่จะได้หลังบันทึก</span>
       </div>
 
-      <button type="submit" class="btn-submit"><i class="fa-solid fa-check" style="margin-right:6px;"></i>ยืนยันบันทึก</button>
+      <button type="submit" class="btn-submit"><i class="fa-solid fa-check" style="margin-right:6px;"></i>บันทึกและรับลิงก์ลูกค้า</button>
+
+
     </form>
   </div>
 </div>
@@ -1179,6 +1216,32 @@ function printAllReceipts(copyType) {
         </div>
       </div>`;
     }
+
+    // สลิปโอนเงิน (ถ้ามี)
+    if (r?.slip_url && r.slip_url.startsWith('http')) {
+      pages += `<div style="page-break-after:always;font-family:'Sarabun','Prompt',sans-serif;color:#000;padding:20mm 15mm;text-align:center;">
+        <div style="font-size:18px;font-weight:700;line-height:1.8;margin-bottom:10px;">
+          ${r.customer || ''}<br>
+          ${formatDate(dateStr)}<br>
+          ${orderNum}
+        </div>
+        <div style="font-size:13px;color:#777;margin-bottom:20px;">สลิปโอนเงิน</div>
+        <div style="display:inline-block;max-width:520px;">
+          <img src="${r.slip_url}" style="max-width:100%;max-height:420px;border:1px solid #999;">
+        </div>
+      </div>`;
+    } else {
+      pages += `<div style="page-break-after:always;font-family:'Sarabun','Prompt',sans-serif;color:#000;padding:20mm 15mm;text-align:center;">
+        <div style="font-size:18px;font-weight:700;line-height:1.8;margin-bottom:20px;">
+          ${r?.customer || ''}<br>
+          ${formatDate(dateStr)}<br>
+          ${orderNum}
+        </div>
+        <div style="border:2px dashed #ccc;padding:40px;border-radius:12px;color:#aaa;font-size:14px;">
+          ไม่มีสลิปโอนเงิน
+        </div>
+      </div>`;
+    }
   });
 
   openPrintWindow(pages, `ชุดเอกสารบัญชี ${from} - ${to}`, true);
@@ -1216,6 +1279,39 @@ function printIdCardSummary() {
   });
 
   openPrintWindow(pages, 'สำเนาบัตรประชาชน', true);
+}
+
+function printSlipSummary() {
+  const filtered = getSalesFiltered();
+  const seen = new Set();
+  const slips = [];
+  filtered.forEach(r => {
+    const bid = r.booking_id || r.rental_id;
+    if (seen.has(bid)) return;
+    seen.add(bid);
+    if (r.slip_url && r.slip_url.startsWith('http')) {
+      const orderNum = getOrderNo(rentals.filter(x => (x.booking_id||x.rental_id) === bid));
+      slips.push({ customer: r.customer, phone: r.phone, url: r.slip_url, date: (r.created_at||r.start||'').slice(0,10), orderNum });
+    }
+  });
+  if (slips.length === 0) { showToast('ไม่มีสลิปในช่วงนี้', 'err'); return; }
+
+  let pages = '';
+  slips.forEach(c => {
+    pages += `<div style="page-break-after:always;font-family:'Sarabun','Prompt',sans-serif;color:#000;padding:20mm 15mm;text-align:center;">
+      <div style="font-size:18px;font-weight:700;line-height:1.8;margin-bottom:10px;">
+        ${c.customer || ''}<br>
+        ${formatDate(c.date)}<br>
+        ${c.orderNum}
+      </div>
+      <div style="font-size:13px;color:#777;margin-bottom:20px;">สลิปโอนเงิน</div>
+      <div style="display:inline-block;max-width:520px;">
+        <img src="${c.url}" style="max-width:100%;max-height:420px;border:1px solid #999;">
+      </div>
+    </div>`;
+  });
+
+  openPrintWindow(pages, 'สลิปโอนเงิน', true);
 }
 
 function renderSales() {
@@ -1354,7 +1450,8 @@ function renderSalesContent() {
       <button onclick="printAllReceipts('customer')" style="width:100%;margin-bottom:8px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-receipt" style="margin-right:6px;color:var(--rose);"></i>รวมใบเสร็จ (สำหรับลูกค้า)</button>
       <button onclick="printAllReceipts('account')" style="width:100%;margin-bottom:8px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-file-invoice" style="margin-right:6px;color:var(--rose);"></i>รวมใบเสร็จ (สำหรับบัญชี)</button>
       <button onclick="printIdCardSummary()" style="width:100%;margin-bottom:8px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-id-card" style="margin-right:6px;color:var(--rose);"></i>รวมสำเนาบัตรประชาชน</button>
-      <button onclick="printAllReceipts('account-paired')" style="width:100%;padding:12px;background:var(--ink);color:white;border:none;border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>รวมใบเสร็จ + สำเนาบัตร (ชุดส่งบัญชี)</button>
+      <button onclick="printSlipSummary()" style="width:100%;margin-bottom:8px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-money-bill-transfer" style="margin-right:6px;color:var(--rose);"></i>รวมสลิปโอนเงิน</button>
+      <button onclick="printAllReceipts('account-paired')" style="width:100%;padding:12px;background:var(--ink);color:white;border:none;border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>ชุดส่งบัญชี (ใบเสร็จ + บัตร + สลิป)</button>
     </div>
   `;
 }
@@ -1506,7 +1603,7 @@ function renderGroupedCards(list, today) {
     return `<div class="rental-card" style="flex-direction:column;align-items:stretch;gap:0;">
       <div onclick="showBookingDetail('${bid}')" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;cursor:pointer;">
         <div>
-          <div class="card-customer" style="margin-bottom:2px;">${first.customer}${delIcon}</div>
+          <div class="card-customer" style="margin-bottom:2px;">${first.customer === 'รอลูกค้ากรอก' || !first.customer ? '<span style="color:var(--ink-muted);font-weight:600;font-style:italic;">รอลูกค้ากรอก</span>' : first.customer}${delIcon}</div>
           <div class="date-highlight${over?' date-overdue':''}" style="font-size:11px;">${formatDate(first.start)} → ${formatDate(first.end)}${over?'<span class="tag-overdue"><i class="fa-solid fa-triangle-exclamation"></i> เกินกำหนด</span>':''}</div>
           ${first.deposit ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
             <div style="font-size:13px;font-weight:700;color:var(--rose);">${CURRENCY}${Number(first.deposit).toLocaleString()}</div>
@@ -1793,7 +1890,7 @@ function renderHistory() {
       <!-- header -->
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
         <div>
-          <div class="card-customer" style="margin-bottom:2px;">${first.customer}${delIcon}</div>
+          <div class="card-customer" style="margin-bottom:2px;">${first.customer === 'รอลูกค้ากรอก' || !first.customer ? '<span style="color:var(--ink-muted);font-weight:600;font-style:italic;">รอลูกค้ากรอก</span>' : first.customer}${delIcon}</div>
           <div style="font-size:11px;color:var(--ink-muted);">${formatDate(first.start)} → ${formatDate(first.end)}</div>
           ${deposit ? `<div style="font-size:13px;font-weight:700;color:var(--rose);margin-top:2px;">${CURRENCY}${deposit.toLocaleString()}</div>` : ''}
         </div>
@@ -2129,13 +2226,7 @@ function generateOrderNo(paymentMethod) {
 
 async function submitNewRental(e) {
   e.preventDefault();
-  const selectedDel = document.querySelector('#delivery-picker .cond-option.selected');
-  const delivery = selectedDel ? selectedDel.dataset.val : 'pickup';
-  const address  = (delivery === 'mail' || delivery === 'parcel') ? document.getElementById('r-address').value.trim() : '';
-  if ((delivery === 'mail' || delivery === 'parcel') && !address) {
-    showToast('กรุณากรอกที่อยู่จัดส่ง', 'warn');
-    return;
-  }
+
   // เช็ครายการชุด
   const validItems = dressItems.filter(d => d.clothesId.trim() !== '');
   if (validItems.length === 0) {
@@ -2150,16 +2241,22 @@ async function submitNewRental(e) {
     }
   }
 
-  const customer = document.getElementById('r-customer').value.trim();
-  const phone    = document.getElementById('r-phone').value.trim();
+  const admCustName = (document.getElementById('r-customer')?.value || '').trim();
+  const customer = admCustName || 'รอลูกค้ากรอก';
+  const phone    = (document.getElementById('r-phone')?.value || '').trim();
   const deposit  = Number(document.getElementById('r-deposit').value || 0);
   const discount = Number(document.getElementById('r-discount').value || 0);
   const start    = document.getElementById('r-start').value;
   const end      = document.getElementById('r-end').value;
   const admin_name = (document.getElementById('r-admin')?.value || '').trim();
+  const selDelivery = document.querySelector('#delivery-picker .cond-option.selected');
+  const delivery = selDelivery ? selDelivery.dataset.val : 'pickup';
+  const address  = (delivery === 'mail' || delivery === 'parcel') ? (document.getElementById('r-address')?.value || '').trim() : '';
   const selPay = document.querySelector('#payment-picker .cond-option.selected');
-  const payment_method = selPay ? selPay.dataset.val : 'cash';
-  const id_card_url = (document.getElementById('r-idcard-url')?.value || '').trim();
+  const payment_method = selPay ? selPay.dataset.val : 'transfer';
+  // ถ้าแอดมินกรอกชื่อลูกค้าเอง = จัดการครบหน้าร้าน → ชำระแล้ว
+  const init_payment_status = admCustName ? 'paid' : 'unpaid';
+  const id_card_url = '';
   const booking_id = 'B-' + Date.now();
   const customer_token = genToken();
 
@@ -2183,7 +2280,7 @@ async function submitNewRental(e) {
         order_no: validItems.indexOf(item) === 0 ? order_no : null,
         id_card_url: (validItems.indexOf(item) === 0 ? id_card_url : '') || null,
         customer_token,
-        payment_status: 'unpaid'
+        payment_status: init_payment_status
       });
       await sbPatch('inventory', { id: item.clothesId }, { status: 'rented' });
     }
@@ -2201,24 +2298,29 @@ async function submitNewRental(e) {
     }
 
     await refreshData();
-    closeModal('modal-rental');
     document.getElementById('form-rental').reset();
-    if (document.getElementById('r-admin')) document.getElementById('r-admin').value = '';
-    if (document.getElementById('r-idcard-url')) {
-      document.getElementById('r-idcard-url').value = '';
-      document.getElementById('idcard-preview').style.display = 'none';
-      document.getElementById('idcard-placeholder').style.display = 'block';
-    }
+    if (document.getElementById('r-admin'))    document.getElementById('r-admin').value = '';
+    if (document.getElementById('r-customer')) document.getElementById('r-customer').value = '';
+    if (document.getElementById('r-phone'))    document.getElementById('r-phone').value = '';
+    if (document.getElementById('r-address'))  document.getElementById('r-address').value = '';
+    if (document.getElementById('r-idcard-url')) document.getElementById('r-idcard-url').value = '';
     dressItems = [];
     renderDressItems();
     document.querySelectorAll('#delivery-picker .cond-option').forEach((o,i) => o.classList.toggle('selected', i === 0));
     document.querySelectorAll('#payment-picker .cond-option').forEach((o,i) => o.classList.toggle('selected', i === 0));
-    document.getElementById('address-wrap').style.display = 'none';
-    showReceiptByBooking(booking_id);
+    if (document.getElementById('address-wrap')) document.getElementById('address-wrap').style.display = 'none';
+    if (document.getElementById('adm-cust-fields')) {
+      document.getElementById('adm-cust-fields').style.display = 'none';
+      document.getElementById('adm-cust-chevron').className = 'fa-solid fa-chevron-down';
+    }
+    closeModal('modal-rental');
+    // แสดง modal ลิงก์ส่งลูกค้า
+    const shareLink = customerLink(customer_token);
+    document.getElementById('share-link-text').textContent = shareLink;
+    document.getElementById('modal-share-link').classList.add('open');
+    document.getElementById('modal-share-link')._bookingId = booking_id;
     if (_missingCols) {
       showToast('บันทึกแล้ว แต่ยังไม่ได้เพิ่มคอลัมน์ใน Supabase — ลิงก์ลูกค้าจะยังไม่ทำงาน', 'warn');
-    } else {
-      showToast('บันทึกการเช่าสำเร็จ', 'ok');
     }
   } catch(err) { showToast(err.message, 'err'); }
   finally { setLoading(false); }
@@ -2428,7 +2530,7 @@ function buildReceiptHtml(bookingId, singleCopy) {
   const issuedDate = formatDate((first.created_at || first.start || getToday()).slice(0,10));
   const orderNum  = getOrderNo(bookingRentals);
   const totalItemPrice = bookingRentals.reduce((s,r) => s + Number(r.item_price||0), 0);
-  const grandTotal = deposit;
+  const grandTotal = Math.max(0, totalItemPrice - discount);
   const address = first.address || '';
   const delivery = (first.delivery||'pickup').toLowerCase();
   const delLabel = delivery==='mail'?'ส่งแมส':delivery==='parcel'?'ส่งพัสดุ':'รับเอง';
@@ -2516,7 +2618,7 @@ function buildReceiptHtml(bookingId, singleCopy) {
             ผู้รับเงิน<br><br><br>ลงวันที่ ………………
           </td>
           <td style="text-align:center;border-top:1px solid #ccc;padding:5px 2px;width:34%;">
-            ผู้รับใบเสร็จ<br><br><br>ลงวันที่ ………………
+            ผู้จ่ายเงิน / ผู้รับสินค้า<br><br><br>ลงวันที่ ………………
           </td>
           <td style="text-align:center;border-top:1px solid #ccc;padding:5px 2px;width:33%;">
             ในนาม<br>บริษัท ทะพา ทำอะไรก็รวย จำกัด<br><br>นางสาวธัญเรศ วันช่วย
@@ -2532,24 +2634,46 @@ function buildReceiptHtml(bookingId, singleCopy) {
 
 // แปลงเลขเป็นตัวหนังสือภาษาไทย (เฉพาะบาท)
 function bahtText(amount) {
-  const ones = ['','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
-  const tens = ['','สิบ','ยี่สิบ','สามสิบ','สี่สิบ','ห้าสิบ','หกสิบ','เจ็ดสิบ','แปดสิบ','เก้าสิบ'];
-  const units = ['','ร้อย','พัน','หมื่น','แสน','ล้าน'];
-  if (amount === 0) return 'ศูนย์บาทถ้วน';
-  let n = Math.floor(amount);
-  let str = '';
-  const digits = String(n).split('').reverse();
-  digits.forEach((d, i) => {
-    const di = Number(d);
-    if (di === 0) return;
-    const unitIdx = i % 6;
-    if (i > 0 && i % 6 === 0) str = 'ล้าน' + str;
-    if (unitIdx === 1 && di === 1) str = 'สิบ' + str;
-    else if (unitIdx === 1 && di === 2) str = 'ยี่สิบ' + str;
-    else if (unitIdx === 1) str = tens[di] + str;
-    else str = ones[di] + units[unitIdx] + str;
-  });
-  return str + 'บาทถ้วน';
+  amount = Math.round((Number(amount) + Number.EPSILON) * 100) / 100;
+  if (isNaN(amount)) return '';
+  const txt  = ['','หนึ่ง','สอง','สาม','สี่','ห้า','หก','เจ็ด','แปด','เก้า'];
+  const unit = ['','สิบ','ร้อย','พัน','หมื่น','แสน'];
+
+  function readGroup(s) {
+    let r = '';
+    const len = s.length;
+    for (let i = 0; i < len; i++) {
+      const d = +s[i];
+      const pos = len - 1 - i; // 0=หลักหน่วย, 1=สิบ, ... 5=แสน
+      if (d === 0) continue;
+      if (pos === 0) {
+        r += (d === 1 && len > 1) ? 'เอ็ด' : txt[d];
+      } else if (pos === 1) {
+        r += (d === 1) ? 'สิบ' : (d === 2 ? 'ยี่สิบ' : txt[d] + 'สิบ');
+      } else {
+        r += txt[d] + unit[pos];
+      }
+    }
+    return r;
+  }
+
+  const baht = Math.floor(amount);
+  const satang = Math.round((amount - baht) * 100);
+  let result = '';
+
+  if (baht === 0) {
+    result = 'ศูนย์';
+  } else {
+    const s = String(baht);
+    if (s.length > 6) {
+      result = readGroup(s.slice(0, s.length - 6)) + 'ล้าน' + readGroup(s.slice(s.length - 6));
+    } else {
+      result = readGroup(s);
+    }
+  }
+  result += 'บาท';
+  result += (satang > 0) ? readGroup(String(satang)) + 'สตางค์' : 'ถ้วน';
+  return result;
 }
 
 /* ── RECEIPT ── */
@@ -2683,7 +2807,7 @@ async function shareReceipt() {
 
 /* ── REPAIR DONE ── */
 async function markRepairDone(id) {
-  if (!confirm(`ยืนยันว่าชุด ${id} ซ่อมเสร็จแล้ว?`)) return;
+  if (!(await customConfirm(`ยืนยันว่าชุด ${id} ซ่อมเสร็จแล้ว?`, { danger: false, okText: 'ยืนยัน' }))) return;
   setLoading(true);
   try {
     await sbPatch('inventory', { id }, { status: 'available' });
@@ -2696,17 +2820,25 @@ async function markRepairDone(id) {
 /* ── DELETE BOOKING (all items in booking) ── */
 async function deleteBooking(bookingId) {
   const items = rentals.filter(r => (r.booking_id || r.rental_id) === bookingId);
-  if (!confirm(`ลบ booking นี้ออก? (${items.length} ชุด)\nถ้าชุดยังเช่าอยู่จะถูกเปลี่ยนสถานะกลับเป็น "ว่าง" ด้วย`)) return;
+  if (!(await customConfirm(`ลบคิวนี้ออก? (${items.length} ชุด)\nถ้าชุดยังเช่าอยู่จะถูกเปลี่ยนสถานะกลับเป็น "ว่าง" ด้วย`, { okText: 'ลบ' }))) return;
   setLoading(true);
   try {
     for (const r of items) {
       if (r.status === 'active') {
         await sbPatch('inventory', { id: r.clothes_id }, { status: 'available' });
       }
-      await fetch(`${SUPABASE_URL}/rest/v1/rentals?rental_id=eq.${encodeURIComponent(r.rental_id)}`, {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rentals?rental_id=eq.${encodeURIComponent(r.rental_id)}`, {
         method: 'DELETE',
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=representation' }
       });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.message || `ลบไม่สำเร็จ (${res.status})`);
+      }
+      const deleted = await res.json().catch(() => []);
+      if (!Array.isArray(deleted) || deleted.length === 0) {
+        throw new Error('ลบไม่สำเร็จ \u2014 Supabase ไม่อนุญาตให้ลบ ต้องเพิ่ม DELETE policy ให้ตาราง rentals');
+      }
     }
     await refreshData();
     showToast('ลบรายการแล้ว', 'ok');
@@ -3241,7 +3373,7 @@ function renderCustomerForm(rows) {
 
   const summaryCard = `<div class="cp-card">
     <h3><i class="fa-solid fa-receipt"></i>รายละเอียดการเช่า</h3>
-    <div class="cp-row"><span>ชื่อ</span><span>${cpEscape(first.customer)}</span></div>
+    ${(first.customer && first.customer !== 'รอลูกค้ากรอก') ? `<div class="cp-row"><span>ชื่อ</span><span>${cpEscape(first.customer)}</span></div>` : ''}
     ${orderNo ? `<div class="cp-row"><span>เลขที่</span><span>${cpEscape(orderNo)}</span></div>` : ''}
     <div class="cp-row"><span>วันที่เช่า</span><span>${formatDate(first.start)} → ${formatDate(first.end)}</span></div>
     <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(200,114,106,0.12);">${itemsHtml}</div>
@@ -3267,6 +3399,18 @@ function renderCustomerForm(rows) {
   _cpIdUrl   = first.id_card_url && String(first.id_card_url).startsWith('http') ? first.id_card_url : '';
 
   body.innerHTML = summaryCard + `
+    <div class="cp-card">
+      <h3><i class="fa-solid fa-user"></i>ข้อมูลลูกค้า <span class="cp-required">*</span></h3>
+      <div style="margin-bottom:10px;">
+        <div class="cp-label">ชื่อ-นามสกุล <span class="cp-required">*</span></div>
+        <input type="text" id="cp-cust-name" class="cp-textarea" style="min-height:unset;height:42px;padding:10px 13px;" placeholder="กรอกชื่อ-นามสกุล" value="${cpEscape(first.customer !== 'รอลูกค้ากรอก' ? (first.customer||'') : '')}">
+      </div>
+      <div>
+        <div class="cp-label">เบอร์โทรศัพท์ <span class="cp-required">*</span></div>
+        <input type="tel" id="cp-cust-phone" class="cp-textarea" style="min-height:unset;height:42px;padding:10px 13px;" placeholder="08x-xxx-xxxx" value="${cpEscape(first.phone||'')}">
+      </div>
+    </div>
+
     <div class="cp-card">
       <h3><i class="fa-solid fa-truck"></i>วิธีรับชุด <span class="cp-required">*</span></h3>
       <div class="cp-deliv" id="cp-deliv">
@@ -3397,6 +3541,49 @@ async function cpUpload(inputEl, kind) {
   }
 }
 
+async function doShareLinkCopy() {
+  const link = document.getElementById('share-link-text').textContent;
+  let ok = false;
+  try { await navigator.clipboard.writeText(link); ok = true; } catch(e) {}
+  if (!ok) { const ta=document.createElement('textarea'); ta.value=link; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');ok=true;}catch(e){} document.body.removeChild(ta); }
+  const btn = document.getElementById('share-copy-btn');
+  btn.innerHTML = '<i class="fa-solid fa-check" style="margin-right:7px;"></i>คัดลอกแล้ว!';
+  btn.style.background = 'var(--green)';
+  setTimeout(() => { btn.innerHTML='<i class="fa-solid fa-copy" style="margin-right:7px;"></i>คัดลอกลิงก์'; btn.style.background='var(--ink)'; }, 2500);
+  showToast(ok ? 'คัดลอกลิงก์ลูกค้าแล้ว ✓' : 'ลิงก์: '+link, ok ? 'ok' : 'warn');
+}
+function doShareLinkReceipt() {
+  const bid = document.getElementById('modal-share-link')._bookingId;
+  closeModal('modal-share-link');
+  if (bid) showReceiptByBooking(bid);
+}
+
+let _confirmResolve = null;
+function customConfirm(message, opts = {}) {
+  return new Promise(resolve => {
+    _confirmResolve = resolve;
+    document.getElementById('confirm-msg').innerHTML = String(message).replace(/\n/g, '<br>');
+    const okBtn = document.getElementById('confirm-ok-btn');
+    okBtn.textContent = opts.okText || 'ยืนยัน';
+    okBtn.style.background = (opts.danger === false) ? 'var(--ink)' : '#c74545';
+    document.getElementById('modal-confirm').classList.add('open');
+  });
+}
+function resolveConfirm(val) {
+  document.getElementById('modal-confirm').classList.remove('open');
+  if (_confirmResolve) { const r = _confirmResolve; _confirmResolve = null; r(val); }
+}
+
+function toggleAdminCustFields() {
+  const box = document.getElementById('adm-cust-fields');
+  const chev = document.getElementById('adm-cust-chevron');
+  const open = box.style.display === 'none';
+  box.style.display = open ? 'block' : 'none';
+  chev.className = open ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down';
+  chev.style.color = 'var(--rose)';
+  chev.style.fontSize = '12px';
+}
+
 async function cpCopyAccount() {
   const acc = '8601785390';
   let ok = false;
@@ -3417,6 +3604,11 @@ async function cpCopyAccount() {
 }
 
 async function submitCustomerInfo() {
+  const custName  = (document.getElementById('cp-cust-name')?.value  || '').trim();
+  const custPhone = (document.getElementById('cp-cust-phone')?.value || '').trim();
+  if (!custName)  { showToast('กรุณากรอกชื่อ-นามสกุล', 'warn'); document.getElementById('cp-cust-name')?.focus(); return; }
+  if (!custPhone) { showToast('กรุณากรอกเบอร์โทรศัพท์', 'warn'); document.getElementById('cp-cust-phone')?.focus(); return; }
+  if (!_cpIdUrl)   { showToast('กรุณาอัปโหลดรูปบัตรประชาชน', 'warn'); return; }
   if (!_cpSlipUrl) { showToast('กรุณาอัปโหลดสลิปโอนเงิน', 'warn'); return; }
   let address = '';
   if (_cpDelivery === 'mail' || _cpDelivery === 'parcel') {
@@ -3428,6 +3620,8 @@ async function submitCustomerInfo() {
   btn.innerHTML = '<div class="spinner" style="width:18px;height:18px;border-width:2px;display:inline-block;vertical-align:middle;"></div> กำลังส่ง...';
   try {
     const patch = {
+      customer: custName,
+      phone: custPhone,
       slip_url: _cpSlipUrl,
       id_card_url: _cpIdUrl,
       delivery: _cpDelivery,

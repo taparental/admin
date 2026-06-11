@@ -52,7 +52,8 @@
     .btn-refresh.spinning i { animation: spin 0.7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .conn-status { display: flex; align-items: center; gap: 4px; font-size: 9px; padding: 4px 8px; border-radius: 20px; white-space: nowrap; }
+    .conn-status { display: flex; align-items: center; justify-content: center; padding: 7px; border-radius: 50%; white-space: nowrap; }
+    .conn-status #conn-text { display: none; }
     .conn-status.ok { background: var(--green-light); color: var(--green); }
     .conn-status.error { background: var(--rose-light); color: var(--rose-dark); }
     .conn-status.loading { background: var(--gold-light); color: #9a6e1a; }
@@ -236,7 +237,6 @@
     @media (max-width: 380px) {
       .btn-new-rental { padding: 8px 10px; font-size: 11px; }
       .btn-new-rental span { display: none; }
-      .conn-status { display: none; }
     }
 
     /* ════════ ADMIN PROFILE CHIPS ════════ */
@@ -324,6 +324,23 @@
   <input type="file" id="cp-slip-file" accept="image/*" style="display:none;" onchange="cpUpload(this,'slip')">
 </div>
 
+<!-- ════════ MODAL: ปริ้นชุดบัญชีเฉพาะเลขที่ ════════ -->
+<div id="modal-acc-numbers" class="modal-overlay" onclick="handleOverlayClick(event,'modal-acc-numbers')">
+  <div class="modal-sheet" style="max-width:420px;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title">ปริ้นชุดส่งบัญชี — เฉพาะเลขที่</div>
+      <button class="modal-close" onclick="closeModal('modal-acc-numbers')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div style="padding:4px 2px 8px;">
+      <div style="font-size:12px;color:var(--ink-muted);margin-bottom:8px;">กรอกเลขใบเสร็จที่ต้องการ (ใบเสร็จ + บัตร + สลิป) — คั่นด้วยเว้นวรรค จุลภาค หรือขึ้นบรรทัดใหม่</div>
+      <textarea id="acc-numbers-input" class="form-textarea" style="min-height:90px;font-family:monospace;font-size:13px;" placeholder="เช่น&#10;RE2569060013, RE2569060005&#10;หรือพิมพ์แค่เลขท้าย: 13 5 23"></textarea>
+      <div id="acc-numbers-hint" style="font-size:11px;margin-top:6px;min-height:14px;"></div>
+      <button onclick="doPrintAccountByNumbers()" class="btn-submit" style="margin-top:10px;"><i class="fa-solid fa-print" style="margin-right:6px;"></i>ปริ้นชุดเอกสารของเลขนี้</button>
+    </div>
+  </div>
+</div>
+
 <!-- ════════ CONFIRM MODAL (ใช้แทน confirm() ของเบราว์เซอร์) ════════ -->
 <div id="modal-confirm" class="modal-overlay" onclick="handleOverlayClick(event,'modal-confirm')" style="z-index:1300;">
   <div class="modal-sheet" style="max-width:360px;">
@@ -383,8 +400,8 @@
         </div>
       </div>
       <div class="header-actions">
-        <button id="admin-selector-btn" onclick="toggleAdminMenu(event)" style="display:flex;align-items:center;gap:5px;background:var(--cream);border:1.5px solid var(--rose);color:var(--ink);padding:6px 11px;border-radius:20px;font-family:'Prompt',sans-serif;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
-          <i class="fa-solid fa-user" style="color:var(--rose);font-size:11px;"></i><span id="admin-current">เลือกแอดมิน</span><i class="fa-solid fa-chevron-down" style="font-size:9px;"></i>
+        <button id="admin-selector-btn" onclick="toggleAdminMenu(event)" style="display:flex;align-items:center;gap:4px;background:var(--cream);border:1.5px solid var(--rose);color:var(--ink);padding:7px 9px;border-radius:20px;font-family:'Prompt',sans-serif;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:96px;overflow:hidden;">
+          <i class="fa-solid fa-user" style="color:var(--rose);font-size:12px;flex-shrink:0;"></i><span id="admin-current" style="overflow:hidden;text-overflow:ellipsis;"></span>
         </button>
         <div id="conn-badge" class="conn-status loading"><div class="conn-dot"></div><span id="conn-text">เชื่อมต่อ</span></div>
         <button id="btn-new-top" class="btn-new-rental" onclick="openModal('modal-rental')"><i class="fa-solid fa-plus"></i><span> ลงคิวเช่า</span></button>
@@ -1134,6 +1151,8 @@ function getSalesFiltered() {
   const from = document.getElementById('sales-date-from')?.value || '';
   const to   = document.getElementById('sales-date-to')?.value   || getToday();
   return rentals.filter(r => {
+    // ไม่นับคิวที่ยังไม่ล็อค (ลูกค้ายังกรอกข้อมูล/โอนไม่ครบ) — ไม่เข้าบัญชี/ใบเสร็จ
+    if (r.payment_status === 'unpaid') return false;
     const dateStr = (r.created_at || r.start || '').slice(0, 10);
     if (from && dateStr < from) return false;
     if (to   && dateStr > to)   return false;
@@ -1236,7 +1255,54 @@ function printAllReceipts(copyType) {
     return;
   }
 
-  // account-paired — ใบเสร็จบัญชี + สำเนาบัตร คู่กันต่อลูกค้า
+  // account-paired — ใบเสร็จบัญชี + สำเนาบัตร + สลิป คู่กันต่อลูกค้า
+  openPrintWindow(buildAccountSetPages(bookingIds), `ชุดเอกสารบัญชี ${from} - ${to}`, true);
+}
+
+// ปริ้นชุดส่งบัญชีเฉพาะเลขที่ที่กรอก (เผื่อปริ้นแก้บางเลข ไม่ต้องปริ้นใหม่ทั้งหมด)
+function printAccountSetByNumbers() {
+  document.getElementById('acc-numbers-input').value = '';
+  document.getElementById('acc-numbers-hint').textContent = '';
+  openModal('modal-acc-numbers');
+  setTimeout(function(){ document.getElementById('acc-numbers-input').focus(); }, 200);
+}
+
+function doPrintAccountByNumbers() {
+  const raw = (document.getElementById('acc-numbers-input').value || '').trim();
+  if (!raw) { document.getElementById('acc-numbers-hint').innerHTML = '<span style="color:#c74545;">\u0e01\u0e23\u0e38\u0e13\u0e32\u0e01\u0e23\u0e2d\u0e01\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48</span>'; return; }
+  const tokens = raw.split(/[\s,]+/).map(function(t){ return t.trim().toUpperCase(); }).filter(Boolean);
+  const bookingIds = [];
+  const seen = new Set();
+  const notFound = [];
+  tokens.forEach(function(tok) {
+    const digits = tok.replace(/\D/g, '');
+    const match = rentals.find(function(r) {
+      if (!r.order_no) return false;
+      const on = r.order_no.toUpperCase();
+      if (on === tok) return true;
+      if (digits && on.endsWith(digits)) {
+        const runDigits = (on.slice(-4).replace(/^0+/, '') || '0');
+        return runDigits === (digits.replace(/^0+/, '') || '0');
+      }
+      return false;
+    });
+    if (match) {
+      const bid = match.booking_id || match.rental_id;
+      if (!seen.has(bid)) { seen.add(bid); bookingIds.push(bid); }
+    } else {
+      notFound.push(tok);
+    }
+  });
+  if (bookingIds.length === 0) {
+    document.getElementById('acc-numbers-hint').innerHTML = '<span style="color:#c74545;">\u0e44\u0e21\u0e48\u0e1e\u0e1a\u0e40\u0e25\u0e02\u0e17\u0e35\u0e48\u0e15\u0e23\u0e07\u0e01\u0e31\u0e19 \u2014 \u0e25\u0e2d\u0e07\u0e01\u0e23\u0e2d\u0e01\u0e40\u0e25\u0e02\u0e40\u0e15\u0e47\u0e21 \u0e40\u0e0a\u0e48\u0e19 RE2569060013</span>';
+    return;
+  }
+  closeModal('modal-acc-numbers');
+  if (notFound.length) showToast('\u0e44\u0e21\u0e48\u0e1e\u0e1a: ' + notFound.join(', '), 'warn');
+  openPrintWindow(buildAccountSetPages(bookingIds), '\u0e0a\u0e38\u0e14\u0e2a\u0e48\u0e07\u0e1a\u0e31\u0e0d\u0e0a\u0e35 (' + bookingIds.length + ' \u0e40\u0e25\u0e02)', true);
+}
+
+function buildAccountSetPages(bookingIds) {
   let pages = '';
   bookingIds.forEach(bid => {
     const r = rentals.find(x => (x.booking_id||x.rental_id) === bid);
@@ -1301,7 +1367,7 @@ function printAllReceipts(copyType) {
     }
   });
 
-  openPrintWindow(pages, `ชุดเอกสารบัญชี ${from} - ${to}`, true);
+  return pages;
 }
 
 function printIdCardSummary() {
@@ -1509,6 +1575,7 @@ function renderSalesContent() {
       <button onclick="printIdCardSummary()" style="width:100%;margin-bottom:8px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-id-card" style="margin-right:6px;color:var(--rose);"></i>รวมสำเนาบัตรประชาชน</button>
       <button onclick="printSlipSummary()" style="width:100%;margin-bottom:8px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-money-bill-transfer" style="margin-right:6px;color:var(--rose);"></i>รวมสลิปโอนเงิน</button>
       <button onclick="printAllReceipts('account-paired')" style="width:100%;margin-bottom:8px;padding:12px;background:var(--ink);color:white;border:none;border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-layer-group" style="margin-right:6px;"></i>ชุดส่งบัญชี (ใบเสร็จ + บัตร + สลิป)</button>
+      <button onclick="printAccountSetByNumbers()" style="width:100%;margin-bottom:8px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--ink);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-list-ol" style="margin-right:6px;color:var(--ink);"></i>ชุดส่งบัญชี — เฉพาะเลขที่...</button>
       <button onclick="checkDuplicateOrderNos()" style="width:100%;padding:12px;background:#fff0f0;color:#c74545;border:1.5px solid rgba(199,69,69,0.3);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-magnifying-glass" style="margin-right:6px;"></i>ตรวจเลขใบเสร็จซ้ำ</button>
     </div>
   `;
@@ -1678,23 +1745,49 @@ function showCopyFallback(text) {
 }
 
 function openPrintWindow(htmlContent, title, isA4, landscape) {
-  const w = window.open('', '_blank');
-  if (!w) { showToast('กรุณาอนุญาต popup เพื่อปริ้น', 'err'); return; }
+  let overlay = document.getElementById('print-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'print-overlay';
+    document.body.appendChild(overlay);
+  }
   const pageCss = isA4
-    ? `@page { size: A4${landscape?' landscape':''}; margin: 0; } body { margin:0; }`
-    : `@page { margin: 5mm; } body { margin:0; }`;
-  w.document.write(`<!DOCTYPE html><html><head><title>${title}</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
+    ? `@page { size: A4${landscape?' landscape':''}; margin: 0; }`
+    : `@page { margin: 5mm; }`;
+  overlay.innerHTML = `
     <style>
-      @media print { ${pageCss} .no-print { display:none; } }
-      body { font-family:'Sarabun','Prompt',sans-serif; }
-      .print-btn { position:fixed; top:10px; right:10px; padding:12px 20px; background:#2d1f1a; color:white; border:none; border-radius:8px; font-size:14px; cursor:pointer; z-index:999; }
-    </style></head><body>
-    <button class="print-btn no-print" onclick="window.print()">🖨️ ปริ้น</button>
-    ${htmlContent}
-    </body></html>`);
-  w.document.close();
+      #print-overlay { position:fixed; inset:0; z-index:3000; background:#e9e8ee; overflow:auto; -webkit-overflow-scrolling:touch; }
+      #print-overlay .print-toolbar { position:sticky; top:0; display:flex; gap:8px; padding:10px 12px; background:#2d1f1a; z-index:5; box-shadow:0 2px 8px rgba(0,0,0,0.2); }
+      #print-overlay .print-toolbar button { flex:1; padding:13px; border:none; border-radius:11px; font-family:'Prompt',sans-serif; font-size:14px; font-weight:700; cursor:pointer; }
+      #print-overlay .pt-close { background:rgba(255,255,255,0.16); color:white; }
+      #print-overlay .pt-print { background:white; color:#2d1f1a; }
+      #print-overlay .print-title { text-align:center; color:rgba(255,255,255,0.6); font-size:11px; padding:0 12px 8px; background:#2d1f1a; margin-top:-2px; }
+      #print-overlay .print-content { background:white; margin:12px auto 40px; max-width:820px; box-shadow:0 4px 24px rgba(0,0,0,0.15); }
+      @media print {
+        ${pageCss}
+        html, body { margin:0 !important; background:white !important; }
+        body > *:not(#print-overlay) { display:none !important; }
+        #print-overlay { position:static !important; background:white !important; overflow:visible !important; }
+        #print-overlay .print-toolbar, #print-overlay .print-title { display:none !important; }
+        #print-overlay .print-content { margin:0 !important; max-width:none !important; box-shadow:none !important; }
+      }
+    </style>
+    <div class="print-toolbar">
+      <button class="pt-close" onclick="closePrintOverlay()"><i class="fa-solid fa-arrow-left" style="margin-right:6px;"></i>ย้อนกลับ</button>
+      <button class="pt-print" onclick="window.print()"><i class="fa-solid fa-print" style="margin-right:6px;"></i>ปริ้น / บันทึก PDF</button>
+    </div>
+    <div class="print-title">${title || ''}</div>
+    <div class="print-content">${htmlContent}</div>
+  `;
+  overlay.style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  overlay.scrollTop = 0;
+}
+
+function closePrintOverlay() {
+  const o = document.getElementById('print-overlay');
+  if (o) { o.style.display = 'none'; o.innerHTML = ''; }
+  document.body.style.overflow = '';
 }
 
 function renderGroupedCards(list, today) {
@@ -1739,12 +1832,12 @@ function renderGroupedCards(list, today) {
         <div>
           <div class="card-customer" style="margin-bottom:2px;">${first.customer === 'รอลูกค้ากรอก' || !first.customer ? '<span style="color:var(--ink-muted);font-weight:600;font-style:italic;">รอลูกค้ากรอก</span>' : first.customer}${delIcon}</div>
           <div class="date-highlight${over?' date-overdue':''}" style="font-size:11px;">${formatDate(first.start)} → ${formatDate(first.end)}${over?'<span class="tag-overdue"><i class="fa-solid fa-triangle-exclamation"></i> เกินกำหนด</span>':''}</div>
-          ${first.deposit ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
-            <div style="font-size:13px;font-weight:700;color:var(--rose);">${CURRENCY}${Number(first.deposit).toLocaleString()}</div>
-            ${first.payment_status === 'paid'
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
+            <div style="font-size:13px;font-weight:700;color:var(--rose);">${first.deposit ? CURRENCY + Number(first.deposit).toLocaleString() : '<span style="color:var(--ink-muted);font-weight:600;">ยังไม่ใส่ยอด</span>'}</div>
+            ${first.payment_status !== 'unpaid'
               ? `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--green-light);color:var(--green);font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;"><i class="fa-solid fa-circle-check"></i>ชำระแล้ว</span>`
               : `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--gold-light);color:#9a6e1a;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;"><i class="fa-solid fa-clock"></i>รอชำระ</span>`}
-          </div>` : ''}
+          </div>
         </div>
         <div style="display:flex;gap:5px;align-items:center;">
           <button onclick="event.stopPropagation();copyCustomerLink('${bid}')" title="คัดลอกลิงก์ให้ลูกค้า" style="background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.2);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-link"></i></button>
@@ -2257,6 +2350,7 @@ function renderDressItems() {
     });
     priceInput.addEventListener('input', function() {
       item.price = Number(priceInput.value) || 0;
+      item.priceManual = true;
       updateRentalTotal();
     });
     if (item.clothesId) updateDressGuide(item.tmpId);
@@ -2278,9 +2372,9 @@ function updateDressGuide(tmpId) {
   const id = item.clothesId;
   const d = inventory.find(function(i) { return i.id === id; });
   if (d) {
-    if (!item.price || item.price === 0) {
+    if (!item.priceManual) {
       item.price = Number(d.price) || 0;
-      if (priceInput) priceInput.value = item.price;
+      if (priceInput) priceInput.value = item.price || '';
       updateRentalTotal();
     }
     const groupItems = d.group_id ? inventory.filter(function(i) { return i.group_id === d.group_id; }) : null;
@@ -2350,9 +2444,10 @@ function selectDressSize(tmpId, newId) {
   if (codeInput) codeInput.value = newId;
   const d = inventory.find(function(i) { return i.id === newId; });
   if (d) {
+    item.priceManual = false;
     item.price = Number(d.price) || 0;
     const priceInput = document.getElementById('price-' + tmpId);
-    if (priceInput) priceInput.value = item.price;
+    if (priceInput) priceInput.value = item.price || '';
     updateRentalTotal();
   }
   updateDressGuide(tmpId);
@@ -2464,8 +2559,9 @@ async function submitNewRental(e) {
   const booking_id = 'B-' + Date.now();
   const customer_token = genToken();
 
-  // สร้างเลขออเดอร์: RE(โอน)/CS(เงินสด) + ปีพ.ศ. + เดือน + รัน 4 หลัก (รีเซ็ตทุกเดือน แยกตามประเภท)
-  const order_no = await assignOrderNo(payment_method);
+  // รันเลขใบเสร็จเฉพาะคิวที่ "ล็อคแล้ว" (แอดมินกรอกครบ=จ่ายหน้าร้าน)
+  // คิวที่รอลูกค้ากรอก/โอน จะยังไม่ได้เลข จนกว่าลูกค้าจะกรอกข้อมูลกลับมาครบ
+  const order_no = init_payment_status === 'paid' ? await assignOrderNo(payment_method) : null;
 
   setLoading(true);
   try {
@@ -3892,14 +3988,14 @@ function setCurrentAdmin(name) {
   const rAdmin = document.getElementById('r-admin');
   if (rAdmin) rAdmin.value = name;
   const cur = document.getElementById('admin-current');
-  if (cur) cur.textContent = name || 'เลือกแอดมิน';
+  if (cur) cur.textContent = name || '';
   renderAdminChips();
 }
 
 function setupAdminProfilePicker() {
   // ตั้งค่าเริ่มต้นจากที่บันทึกไว้
   const cur = document.getElementById('admin-current');
-  if (cur) cur.textContent = getCurrentAdmin() || 'เลือกแอดมิน';
+  if (cur) cur.textContent = getCurrentAdmin() || '';
   const rAdmin = document.getElementById('r-admin');
   if (rAdmin) rAdmin.value = getCurrentAdmin();
   renderAdminChips();
@@ -4012,6 +4108,15 @@ async function submitCustomerInfo() {
   btn.disabled = true;
   btn.innerHTML = '<div class="spinner" style="width:18px;height:18px;border-width:2px;display:inline-block;vertical-align:middle;"></div> กำลังส่ง...';
   try {
+    // ล็อคคิว: ลูกค้ากรอกครบ+โอนแล้ว → รันเลขใบเสร็จ (ถ้ายังไม่มี)
+    let assignedNo = null;
+    try {
+      const cur = (_cpRows && _cpRows[0]) || {};
+      if (!cur.order_no) {
+        assignedNo = await assignOrderNo('transfer');
+      }
+    } catch (e) { assignedNo = null; }
+
     const patch = {
       customer: custName,
       phone: custPhone,
@@ -4021,6 +4126,7 @@ async function submitCustomerInfo() {
       address: address,
       payment_status: 'paid'
     };
+    if (assignedNo) patch.order_no = assignedNo;
     await sbPatch('rentals', { customer_token: _cpToken }, patch);
     // โหลดข้อมูลใหม่แล้วแสดงหน้ายืนยัน
     const rows = await sbGet('rentals', `customer_token=eq.${encodeURIComponent(_cpToken)}&select=*`);

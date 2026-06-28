@@ -494,8 +494,21 @@
     <!-- HISTORY -->
     <section id="sec-history">
       <div class="section-header"><div class="section-heading">ประวัติการเช่าทั้งหมด</div></div>
-      <div style="padding:0 0 12px;">
-        <input type="text" id="history-search" class="search-input" placeholder="🔍 ค้นหาชื่อลูกค้า / เลขบิล / เบอร์โทร..." oninput="renderHistory()" style="width:100%;box-sizing:border-box;">
+      <div style="padding:0 0 10px;">
+        <input type="text" id="history-search" class="search-input" placeholder="🔍 ค้นหาชื่อลูกค้า / เลขบิล / เบอร์โทร..." oninput="renderHistory()" style="width:100%;box-sizing:border-box;margin-bottom:8px;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <!-- filter payment -->
+          <div style="display:flex;gap:4px;">
+            <button id="hf-all"      onclick="setHistFilter('all')"      style="padding:5px 10px;border-radius:20px;border:1.5px solid var(--rose);font-family:'Prompt',sans-serif;font-size:11px;font-weight:600;cursor:pointer;background:var(--rose);color:white;">ทั้งหมด</button>
+            <button id="hf-cash"     onclick="setHistFilter('cash')"     style="padding:5px 10px;border-radius:20px;border:1.5px solid rgba(200,114,106,0.3);font-family:'Prompt',sans-serif;font-size:11px;font-weight:600;cursor:pointer;background:white;color:var(--ink);">เงินสด</button>
+            <button id="hf-transfer" onclick="setHistFilter('transfer')" style="padding:5px 10px;border-radius:20px;border:1.5px solid rgba(200,114,106,0.3);font-family:'Prompt',sans-serif;font-size:11px;font-weight:600;cursor:pointer;background:white;color:var(--ink);">เงินโอน</button>
+            <button id="hf-unpaid"   onclick="setHistFilter('unpaid')"   style="padding:5px 10px;border-radius:20px;border:1.5px solid rgba(200,114,106,0.3);font-family:'Prompt',sans-serif;font-size:11px;font-weight:600;cursor:pointer;background:white;color:var(--ink);">ยังไม่ชำระ</button>
+          </div>
+          <!-- sort -->
+          <button onclick="toggleHistSort()" id="hist-sort-btn" style="margin-left:auto;padding:5px 10px;border-radius:20px;border:1.5px solid rgba(200,114,106,0.3);font-family:'Prompt',sans-serif;font-size:11px;font-weight:600;cursor:pointer;background:white;color:var(--ink);display:flex;align-items:center;gap:4px;white-space:nowrap;">
+            <i class="fa-solid fa-arrow-down-wide-short" id="hist-sort-icon"></i><span id="hist-sort-label">ใหม่→เก่า</span>
+          </button>
+        </div>
       </div>
       <div id="history-list"></div>
     </section>
@@ -772,6 +785,28 @@
           <div class="cond-option" data-val="cash"><i class="fa-solid fa-money-bill-wave" style="margin-right:4px;"></i>เงินสด (CS)</div>
         </div>
         <div id="edit-orderno-note" style="font-size:11px;color:var(--ink-muted);margin-top:6px;"></div>
+      </div>
+      <!-- บัตรประชาชน -->
+      <div class="form-group">
+        <label class="form-label"><i class="fa-solid fa-id-card" style="margin-right:5px;color:var(--rose);"></i>บัตรประชาชน</label>
+        <div id="edit-id-card-preview" style="margin-bottom:6px;"></div>
+        <div class="img-upload-box" id="edit-id-card-box" onclick="document.getElementById('edit-id-card-file').click()" style="height:70px;">
+          <i class="fa-solid fa-id-card" style="font-size:20px;color:var(--rose-dark);opacity:0.4;"></i>
+          <span style="font-size:11px;">แตะเพื่ออัปโหลด / เปลี่ยนบัตรประชาชน</span>
+        </div>
+        <input type="file" id="edit-id-card-file" accept="image/*" style="display:none;" onchange="uploadEditImage(event,'id_card_url','edit-id-card-preview')">
+        <input type="hidden" id="edit-id-card-url" value="">
+      </div>
+      <!-- สลิปโอนเงิน -->
+      <div class="form-group">
+        <label class="form-label"><i class="fa-solid fa-money-bill-transfer" style="margin-right:5px;color:var(--rose);"></i>สลิปโอนเงิน</label>
+        <div id="edit-slip-preview" style="margin-bottom:6px;"></div>
+        <div class="img-upload-box" id="edit-slip-box" onclick="document.getElementById('edit-slip-file').click()" style="height:70px;">
+          <i class="fa-solid fa-receipt" style="font-size:20px;color:var(--rose-dark);opacity:0.4;"></i>
+          <span style="font-size:11px;">แตะเพื่ออัปโหลด / เปลี่ยนสลิป</span>
+        </div>
+        <input type="file" id="edit-slip-file" accept="image/*" style="display:none;" onchange="uploadEditImage(event,'slip_url','edit-slip-preview')">
+        <input type="hidden" id="edit-slip-url" value="">
       </div>
       <button type="submit" class="btn-submit" style="margin-top:14px;"><i class="fa-solid fa-check" style="margin-right:6px;"></i>บันทึกการแก้ไข</button>
     </form>
@@ -1580,6 +1615,14 @@ function printAllReceipts(copyType, method) {
   }
 
   // account-paired — ใบเสร็จบัญชี + สำเนาบัตร + สลิป คู่กันต่อลูกค้า
+  // เรียงตาม order_no จากน้อยไปมาก
+  bookingIds.sort((a, b) => {
+    const ra = rentals.find(r => (r.booking_id || r.rental_id) === a);
+    const rb = rentals.find(r => (r.booking_id || r.rental_id) === b);
+    const oa = ra?.order_no || '';
+    const ob = rb?.order_no || '';
+    return oa.localeCompare(ob, undefined, { numeric: true });
+  });
   openPrintWindow(buildAccountSetPages(bookingIds), `ชุดเอกสารบัญชี ${from} - ${to}`, true);
 }
 
@@ -1649,10 +1692,10 @@ function buildAccountSetPages(bookingIds) {
           <span><b>${custName}</b> — ${orderNum}</span>
           <span style="font-size:12px;color:#666;">${formatDate(dateStr)}</span>
         </div>
-        <div style="font-size:11px;color:#888;margin-bottom:6px;text-align:center;">สำเนาบัตรประชาชน</div>
+        <div style="font-size:11px;color:#888;margin-bottom:8px;text-align:center;">สำเนาบัตรประชาชน</div>
         <div style="text-align:center;">
           <img src="${r.id_card_url}"
-               style="max-width:100%;width:auto;max-height:calc(297mm - 60mm);object-fit:contain;border:1px solid #ccc;display:block;margin:0 auto;"
+               style="max-width:55%;width:auto;max-height:80mm;object-fit:contain;border:1px solid #ccc;display:block;margin:0 auto;border-radius:4px;"
                onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
           <div style="display:none;border:2px dashed #ccc;padding:40px;border-radius:8px;color:#aaa;font-size:13px;">โหลดรูปบัตรไม่ได้</div>
         </div>
@@ -1677,10 +1720,10 @@ function buildAccountSetPages(bookingIds) {
           <span><b>${custName}</b> — ${orderNum}</span>
           <span style="font-size:12px;color:#666;">${formatDate(dateStr)}</span>
         </div>
-        <div style="font-size:11px;color:#888;margin-bottom:6px;text-align:center;">สลิปโอนเงิน</div>
+        <div style="font-size:11px;color:#888;margin-bottom:8px;text-align:center;">สลิปโอนเงิน</div>
         <div style="text-align:center;">
           <img src="${r.slip_url}"
-               style="max-width:100%;width:auto;max-height:calc(297mm - 60mm);object-fit:contain;border:1px solid #ccc;display:block;margin:0 auto;"
+               style="max-width:40%;width:auto;max-height:90mm;object-fit:contain;border:1px solid #ccc;display:block;margin:0 auto;border-radius:4px;"
                onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
           <div style="display:none;border:2px dashed #ccc;padding:40px;border-radius:8px;color:#aaa;font-size:13px;">โหลดสลิปไม่ได้</div>
         </div>
@@ -1720,15 +1763,14 @@ function printIdCardSummary(method) {
   // 1 หน้า A4 ต่อ 1 คน — ชื่อ/วันที่/เลขออเดอร์ ด้านบน, รูปบัตรกลางหน้า
   let pages = '';
   cards.forEach((c, idx) => {
-    pages += `<div style="page-break-after:always;font-family:'Sarabun','Prompt',sans-serif;color:#000;padding:20mm 15mm;text-align:center;">
-      <div style="font-size:18px;font-weight:700;line-height:1.8;margin-bottom:30px;">
-        ${c.customer}<br>
-        ${formatDate(c.date)}<br>
-        ${c.orderNum}
+    pages += `<div style="page-break-after:always;font-family:'Sarabun','Prompt',sans-serif;color:#000;padding:10mm 12mm;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1.5px solid #000;padding-bottom:4px;margin-bottom:10px;">
+        <span style="font-size:14px;font-weight:700;">${c.customer}</span>
+        <span style="font-size:11px;color:#555;">${c.orderNum} &nbsp;|&nbsp; ${formatDate(c.date)}</span>
       </div>
-      <div style="position:relative;display:inline-block;max-width:520px;">
-        <img src="${c.url}" style="max-width:100%;max-height:340px;border:1px solid #999;">
-        
+      <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;letter-spacing:0.05em;">สำเนาบัตรประชาชน</div>
+      <div style="text-align:center;">
+        <img src="${c.url}" style="max-width:55%;width:auto;max-height:80mm;border:1px solid #999;border-radius:4px;display:block;margin:0 auto;">
       </div>
     </div>`;
   });
@@ -1753,15 +1795,14 @@ function printSlipSummary(method) {
 
   let pages = '';
   slips.forEach(c => {
-    pages += `<div style="page-break-after:always;font-family:'Sarabun','Prompt',sans-serif;color:#000;padding:20mm 15mm;text-align:center;">
-      <div style="font-size:18px;font-weight:700;line-height:1.8;margin-bottom:10px;">
-        ${c.customer || ''}<br>
-        ${formatDate(c.date)}<br>
-        ${c.orderNum}
+    pages += `<div style="page-break-after:always;font-family:'Sarabun','Prompt',sans-serif;color:#000;padding:10mm 12mm;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:1.5px solid #000;padding-bottom:4px;margin-bottom:10px;">
+        <span style="font-size:14px;font-weight:700;">${c.customer || ''}</span>
+        <span style="font-size:11px;color:#555;">${c.orderNum} &nbsp;|&nbsp; ${formatDate(c.date)}</span>
       </div>
-      <div style="font-size:13px;color:#777;margin-bottom:20px;">สลิปโอนเงิน</div>
-      <div style="display:inline-block;max-width:520px;">
-        <img src="${c.url}" style="max-width:100%;max-height:420px;border:1px solid #999;">
+      <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;letter-spacing:0.05em;">สลิปโอนเงิน</div>
+      <div style="text-align:center;">
+        <img src="${c.url}" style="max-width:35%;width:auto;max-height:90mm;border:1px solid #999;border-radius:4px;display:block;margin:0 auto;">
       </div>
     </div>`;
   });
@@ -1822,20 +1863,23 @@ function renderSalesContent() {
     });
     const maxDay = Math.max(...dayList.map(d => dayMap[d.key] || 0), 1);
     const totalDays = dayList.length;
+    const BAR_MAX_PX = 80;
     return `
       <div style="background:white;border-radius:14px;padding:14px 12px 12px;margin-bottom:14px;border:1px solid rgba(200,114,106,0.08);box-shadow:var(--card-shadow);">
-        <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${dayList.length <= 7 ? 'ยอดรายวัน' : `ยอดรายวัน (ย้อนหลัง ${totalDays} วัน)`}</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${dayList.length <= 7 ? 'ยอดรายวัน' : 'ยอดรายวัน (ย้อนหลัง ' + totalDays + ' วัน)'}</div>
         <div style="font-size:10px;color:var(--ink-muted);margin-bottom:10px;">${dayList[0].display} – ${dayList[dayList.length-1].display}</div>
-        <div style="display:flex;align-items:flex-end;gap:${totalDays > 14 ? 3 : 5}px;height:120px;">
-          ${dayList.map(d => {
+        <div style="display:flex;align-items:flex-end;gap:${totalDays > 14 ? 2 : 4}px;">
+          ${dayList.map((d, idx) => {
             const amt = dayMap[d.key] || 0;
-            const h = amt > 0 ? Math.max(6, (amt/maxDay)*84) : 3;
+            const barPx = amt > 0 ? Math.max(4, Math.round((amt/maxDay)*BAR_MAX_PX)) : 2;
             const isToday = d.key === getToday();
-            const labelAmt = amt >= 1000 ? (amt/1000).toFixed(amt>=10000?0:1)+'k' : (amt > 0 ? amt : '');
-            return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;">
-              <div style="font-size:7px;color:var(--rose-dark);font-weight:600;white-space:nowrap;height:12px;line-height:12px;">${labelAmt}</div>
-              <div style="width:100%;background:${amt>0?(isToday?'var(--rose-dark)':'var(--rose)'):'rgba(200,114,106,0.12)'};height:${h}%;border-radius:4px 4px 0 0;"></div>
-              <div style="font-size:${totalDays>14?'7':'8'}px;color:${isToday?'var(--rose-dark)':'var(--ink-muted)'};font-weight:${isToday?700:400};">${d.label}</div>
+            const labelAmt = amt >= 1000 ? (amt/1000).toFixed(amt>=10000?0:1)+'k' : (amt > 0 ? String(amt) : '');
+            const step = totalDays > 15 ? 5 : totalDays > 10 ? 3 : 1;
+            const showLabel = totalDays <= 10 || idx % step === 0 || isToday || idx === totalDays-1;
+            return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:1px;">
+              <div style="font-size:7px;color:var(--rose-dark);font-weight:600;white-space:nowrap;height:11px;line-height:11px;overflow:hidden;">${labelAmt}</div>
+              <div style="width:100%;background:${amt>0?(isToday?'var(--rose-dark)':'var(--rose)'):'rgba(200,114,106,0.12)'};height:${barPx}px;border-radius:3px 3px 0 0;min-height:2px;"></div>
+              <div style="font-size:7px;color:${isToday?'var(--rose-dark)':'var(--ink-muted)'};font-weight:${isToday?700:400};height:10px;line-height:10px;">${showLabel ? d.label : ''}</div>
             </div>`;
           }).join('')}
         </div>
@@ -2218,19 +2262,73 @@ function showCopyFallback(text) {
 }
 
 function openPrintWindow(htmlContent, title, isA4, landscape) {
+  const pageRule = isA4
+    ? `@page { size: A4${landscape ? ' landscape' : ''}; margin: 8mm; }`
+    : `@page { margin: 5mm; }`;
+
+  // ── ลอง popup window ก่อน (ได้ PDF จริง) ──
+  const popup = window.open('', '_blank', 'width=900,height=700');
+  if (popup && !popup.closed) {
+    popup.document.write(`<!DOCTYPE html><html lang="th"><head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>${title || 'เอกสาร'}</title>
+      <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet">
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+      <style>
+        ${pageRule}
+        * { box-sizing: border-box; }
+        body { font-family: 'Sarabun','Prompt',sans-serif; margin: 0; padding: 0; background: #f0ede8; }
+
+        /* ── toolbar (ซ่อนตอนปริ้น) ── */
+        #toolbar {
+          position: sticky; top: 0; z-index: 99;
+          display: flex; align-items: center; gap: 8px;
+          padding: 10px 16px;
+          background: #2d1f1a;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        }
+        #toolbar span { flex: 1; color: rgba(255,255,255,0.6); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #toolbar button { padding: 9px 20px; border: none; border-radius: 9px; font-family: 'Prompt',sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        #btn-close { background: rgba(255,255,255,0.15); color: white; }
+        #btn-print { background: white; color: #2d1f1a; }
+
+        /* ── เนื้อหา ── */
+        #content { background: white; max-width: 820px; margin: 16px auto 48px; padding: 0; box-shadow: 0 4px 24px rgba(0,0,0,0.12); }
+
+        @media print {
+          body { background: white; }
+          #toolbar { display: none !important; }
+          #content { margin: 0 !important; max-width: none !important; box-shadow: none !important; }
+        }
+      </style>
+    </head><body>
+      <div id="toolbar">
+        <button id="btn-close" onclick="window.close()"><i class="fa-solid fa-xmark" style="margin-right:5px;"></i>ปิด</button>
+        <span>${title || ''}</span>
+        <button id="btn-print" onclick="window.print()"><i class="fa-solid fa-print" style="margin-right:6px;"></i>ปริ้น / บันทึก PDF</button>
+      </div>
+      <div id="content">${htmlContent}</div>
+      <script>
+        // auto-print ถ้า URL มี ?autoprint
+        if (location.search.includes('autoprint')) {
+          window.onload = () => setTimeout(() => window.print(), 400);
+        }
+      <\/script>
+    </body></html>`);
+    popup.document.close();
+    return;
+  }
+
+  // ── fallback: overlay (กรณี popup ถูกบล็อก) ──
   let overlay = document.getElementById('print-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'print-overlay';
     document.body.appendChild(overlay);
   }
-  const pageRule = isA4
-    ? `@page { size: A4${landscape?' landscape':''}; margin: 8mm; }`
-    : `@page { margin: 5mm; }`;
-
   overlay.innerHTML = `
     <style>
-      /* ── หน้าจอ: overlay เลื่อนได้ ── */
       #print-overlay { position:fixed; inset:0; z-index:3000; background:#e9e8ee; overflow-y:auto; -webkit-overflow-scrolling:touch; }
       #print-overlay .print-toolbar { position:sticky; top:0; display:flex; gap:8px; padding:10px 12px; background:#2d1f1a; z-index:5; box-shadow:0 2px 8px rgba(0,0,0,0.2); }
       #print-overlay .print-toolbar button { flex:1; padding:13px; border:none; border-radius:11px; font-family:'Prompt',sans-serif; font-size:14px; font-weight:700; cursor:pointer; }
@@ -2238,15 +2336,11 @@ function openPrintWindow(htmlContent, title, isA4, landscape) {
       #print-overlay .pt-print { background:white; color:#2d1f1a; }
       #print-overlay .print-title { text-align:center; color:rgba(255,255,255,0.6); font-size:11px; padding:0 12px 8px; background:#2d1f1a; margin-top:-2px; }
       #print-overlay .print-content { background:white; margin:12px auto 40px; max-width:820px; box-shadow:0 4px 24px rgba(0,0,0,0.15); }
-
-      /* ── ตอนปริ้น: แสดงทุกหน้า ── */
       @media print {
         ${pageRule}
-        /* ซ่อนทุกอย่างยกเว้น print-content */
         body > * { display:none !important; }
         #print-overlay { display:block !important; position:static !important; overflow:visible !important; background:white !important; height:auto !important; width:auto !important; }
-        #print-overlay .print-toolbar,
-        #print-overlay .print-title { display:none !important; }
+        #print-overlay .print-toolbar, #print-overlay .print-title { display:none !important; }
         #print-overlay .print-content { display:block !important; margin:0 !important; max-width:none !important; box-shadow:none !important; width:100% !important; }
         img { max-width:100% !important; height:auto !important; }
       }
@@ -2558,6 +2652,33 @@ function renderInventory() {
     : allCards.join('');
 }
 
+// ── History filter/sort state ──
+let histFilter = 'all'; // all | cash | transfer | unpaid
+let histSortAsc = false; // false=ใหม่→เก่า, true=เก่า→ใหม่
+
+function setHistFilter(f) {
+  histFilter = f;
+  // update button styles
+  ['all','cash','transfer','unpaid'].forEach(id => {
+    const btn = document.getElementById('hf-'+id);
+    if (!btn) return;
+    const active = id === f;
+    btn.style.background = active ? 'var(--rose)' : 'white';
+    btn.style.color = active ? 'white' : 'var(--ink)';
+    btn.style.border = active ? '1.5px solid var(--rose)' : '1.5px solid rgba(200,114,106,0.3)';
+  });
+  renderHistory();
+}
+
+function toggleHistSort() {
+  histSortAsc = !histSortAsc;
+  const icon = document.getElementById('hist-sort-icon');
+  const label = document.getElementById('hist-sort-label');
+  if (icon) icon.className = histSortAsc ? 'fa-solid fa-arrow-up-wide-short' : 'fa-solid fa-arrow-down-wide-short';
+  if (label) label.textContent = histSortAsc ? 'เก่า→ใหม่' : 'ใหม่→เก่า';
+  renderHistory();
+}
+
 function renderHistory() {
   const el = document.getElementById('history-list');
   if (rentals.length === 0) {
@@ -2574,13 +2695,23 @@ function renderHistory() {
     bookingMap[bid].push(r);
   });
 
-  // filter ด้วยคำค้นหา (ชื่อ, เบอร์, เลขบิล)
+  // sort ตาม created_at
   let sortedBookings = Object.entries(bookingMap).sort((a, b) => {
     const aLatest = Math.max(...a[1].map(r => new Date(r.created_at || 0).getTime()));
     const bLatest = Math.max(...b[1].map(r => new Date(r.created_at || 0).getTime()));
-    return bLatest - aLatest;
+    return histSortAsc ? aLatest - bLatest : bLatest - aLatest;
   });
 
+  // filter payment method
+  if (histFilter !== 'all') {
+    sortedBookings = sortedBookings.filter(([bid, items]) => {
+      const first = items[0];
+      if (histFilter === 'unpaid') return first.payment_status === 'unpaid' || (!first.order_no && first.payment_method === 'transfer');
+      return first.payment_method === histFilter;
+    });
+  }
+
+  // filter คำค้นหา
   if (q) {
     sortedBookings = sortedBookings.filter(([bid, items]) => {
       const first = items[0];
@@ -3201,6 +3332,17 @@ function openEditRental(bookingId) {
   }).join('');
   document.getElementById('edit-dress-items').innerHTML = dressHtml;
 
+  // โหลดรูปบัตรประชาชน / สลิป
+  const idCardUrl = first.id_card_url || '';
+  const slipUrl   = first.slip_url   || '';
+  document.getElementById('edit-id-card-url').value = idCardUrl;
+  document.getElementById('edit-slip-url').value   = slipUrl;
+  // preview รูปถ้ามี
+  const idPreview   = document.getElementById('edit-id-card-preview');
+  const slipPreview = document.getElementById('edit-slip-preview');
+  idPreview.innerHTML   = idCardUrl ? `<img src="${idCardUrl}" style="max-width:100%;max-height:120px;border-radius:8px;object-fit:contain;">` : '';
+  slipPreview.innerHTML = slipUrl   ? `<img src="${slipUrl}"   style="max-width:100%;max-height:120px;border-radius:8px;object-fit:contain;">` : '';
+
   openModal('modal-edit-rental');
 }
 
@@ -3215,6 +3357,8 @@ async function submitEditRental(e) {
   const modalEl = document.getElementById('modal-edit-rental');
   const origPayment = modalEl._origPayment;
 
+  const idCardUrl = document.getElementById('edit-id-card-url').value.trim();
+  const slipUrl   = document.getElementById('edit-slip-url').value.trim();
   const updates = {
     customer: document.getElementById('edit-customer').value.trim(),
     phone:    document.getElementById('edit-phone').value.trim(),
@@ -3222,7 +3366,9 @@ async function submitEditRental(e) {
     end:      document.getElementById('edit-end').value,
     deposit:  Number(document.getElementById('edit-deposit').value || 0),
     discount: Number(document.getElementById('edit-discount').value || 0),
-    delivery, address, payment_method
+    delivery, address, payment_method,
+    ...(idCardUrl ? { id_card_url: idCardUrl } : {}),
+    ...(slipUrl   ? { slip_url:   slipUrl   } : {}),
   };
 
   // ถ้าเปลี่ยนประเภทการชำระ → รันเลขใบเสร็จใหม่ในชุดที่ถูกต้อง (เติมช่องว่าง) เลขเดิมจะถูกปล่อยคืน
@@ -3245,6 +3391,20 @@ async function submitEditRental(e) {
     closeModal('modal-edit-rental');
     showToast(newOrderNo ? `แก้ไขแล้ว · เลขใบเสร็จใหม่ ${newOrderNo}` : 'แก้ไขคิวเรียบร้อย', 'ok');
   } catch(err) { showToast(err.message, 'err'); }
+  finally { setLoading(false); }
+}
+
+async function uploadEditImage(event, fieldName, previewId) {
+  const file = event.target.files[0];
+  if (!file) return;
+  setLoading(true);
+  try {
+    const url = await uploadToSupabase(file);
+    document.getElementById(fieldName === 'id_card_url' ? 'edit-id-card-url' : 'edit-slip-url').value = url;
+    const preview = document.getElementById(previewId);
+    if (preview) preview.innerHTML = `<img src="${url}" style="max-width:100%;max-height:120px;border-radius:8px;object-fit:contain;">`;
+    showToast('อัปโหลดรูปสำเร็จ', 'ok');
+  } catch(err) { showToast('อัปโหลดไม่สำเร็จ: ' + err.message, 'err'); }
   finally { setLoading(false); }
 }
 

@@ -429,8 +429,15 @@
         <div class="stat-card available"><div class="stat-label">ว่าง</div><div class="stat-value" id="stat-available">—</div></div>
         <div class="stat-card active-stat"><div class="stat-label">กำลังเช่า</div><div class="stat-value" id="stat-rented">—</div></div>
       </div>
+      <!-- ช่องค้นหา — อยู่เหนือ filter buttons -->
+      <div style="margin-bottom:8px;">
+        <input type="text" id="dashboard-search" class="search-input"
+          placeholder="🔍 ค้นหาชื่อลูกค้า / เลขบิล / รหัสชุด / เบอร์โทร..."
+          oninput="renderDashboard()"
+          style="width:100%;box-sizing:border-box;">
+      </div>
       <!-- quick filter buttons -->
-      <div style="display:flex;gap:8px;margin:10px 0 4px;flex-wrap:wrap;">
+      <div style="display:flex;gap:8px;margin:0 0 4px;flex-wrap:wrap;">
         <button onclick="setDashboardFilter('all')" id="dbf-all" class="sales-range-btn active" style="flex:1;">
           <i class="fa-solid fa-list" style="margin-right:4px;"></i>คิวทั้งหมด
         </button>
@@ -691,6 +698,18 @@
         </label>
       </div>
       <div class="price-preview" id="ret-total"></div>
+      <!-- ── รับเงินแล้ว ── -->
+      <div class="form-group" style="margin-top:12px;">
+        <label class="form-label">สถานะการชำระเงิน</label>
+        <label style="display:flex;align-items:center;gap:10px;background:var(--green-light);padding:12px 14px;border-radius:12px;cursor:pointer;font-size:13px;border:1.5px solid transparent;" id="ret-paid-label">
+          <input type="checkbox" id="ret-paid" style="width:18px;height:18px;accent-color:var(--green);cursor:pointer;" onchange="onRetPaidChange()">
+          <span><i class="fa-solid fa-circle-check" style="margin-right:6px;color:var(--green);"></i>รับเงินแล้ว (เปลี่ยนสถานะเป็น paid ทันที)</span>
+        </label>
+        <div id="ret-unpaid-note-wrap" style="display:none;margin-top:8px;">
+          <label class="form-label" style="color:#9a6e1a;">หมายเหตุ unpaid (จะแสดงในตารางบัญชี)</label>
+          <input type="text" id="ret-unpaid-note" class="form-input" placeholder="เช่น รอโอน, ชำระหน้าร้าน..." style="border-color:rgba(154,110,26,0.4);">
+        </div>
+      </div>
       <button type="submit" class="btn-submit" style="margin-top:14px;"><i class="fa-solid fa-check" style="margin-right:6px;"></i>ยืนยันรับคืน</button>
     </form>
   </div>
@@ -1280,8 +1299,30 @@ function getSalesByMethod(method) {
 function printAccountingSummary(method) {
   const from = document.getElementById('sales-date-from')?.value || '';
   const to   = document.getElementById('sales-date-to')?.value   || getToday();
+
+  // ดึง paid records (ปกติ)
   const filtered = getSalesByMethod(method).filter(r => Number(r.deposit||0) + Number(r.fine||0) > 0);
-  if (filtered.length === 0) { showToast('ไม่มีข้อมูลในช่วงนี้', 'err'); return; }
+
+  // ดึง unpaid records ที่มี order_no และอยู่ในช่วงวันที่ (returned แต่ยังไม่ paid)
+  const unpaidFiltered = rentals.filter(r => {
+    if (r.payment_status !== 'unpaid') return false;
+    if (!r.order_no) return false;
+    if (method !== 'all' && r.payment_method !== method) return false;
+    const dateStr = (r.created_at || r.start || '').slice(0, 10);
+    if (from && dateStr < from) return false;
+    if (to   && dateStr > to)   return false;
+    return true;
+  });
+
+  // สร้าง map order_no → unpaid rental (สำหรับแสดงในแถวขาด)
+  const unpaidOrderMap = {};
+  unpaidFiltered.forEach(r => {
+    if (r.order_no) unpaidOrderMap[r.order_no.toUpperCase()] = r;
+  });
+
+  if (filtered.length === 0 && unpaidFiltered.length === 0) {
+    showToast('ไม่มีข้อมูลในช่วงนี้', 'err'); return;
+  }
 
   // จัดกลุ่มตาม booking
   const bookingMap = {};
@@ -1302,7 +1343,7 @@ function printAccountingSummary(method) {
 
   // ฟังก์ชันสร้างตารางต่อชุด (RE หรือ CS) พร้อมเติมแถวว่างเลขที่ขาด
   function buildTable(bookingsList, prefix) {
-    if (bookingsList.length === 0) return '';
+    if (bookingsList.length === 0 && Object.keys(unpaidOrderMap).filter(k => k.startsWith(prefix)).length === 0) return '';
 
     // คำนวณ prefix ปัจจุบัน เช่น RE256906 หรือ CS256906
     const now = new Date();
@@ -1335,7 +1376,7 @@ function printAccountingSummary(method) {
 
     // หาช่วง min→max เฉพาะเลข valid format
     const maxRun = sorted.length > 0 ? getRunNo(sorted[sorted.length - 1]) : 0;
-    const minRun = sorted.length > 0 ? getRunNo(sorted[0]) : 1;
+    const minRun = 1; // เริ่มจาก 0001 เสมอ เพื่อแสดงช่องว่างตั้งแต่เลขแรก
 
     // map run → booking (เฉพาะ valid format)
     const runMap = {};
@@ -1345,17 +1386,44 @@ function printAccountingSummary(method) {
     let subtotal = 0;
     let dupTotal = 0;
     let rowNum = 0;
+    let unpaidInRange = 0;
 
-    for (let run = minRun; run <= maxRun; run++) {
+    // รวม maxRun กับ unpaid ที่อยู่ในช่วง prefix เดียวกัน
+    const allUnpaidRunsForPrefix = Object.keys(unpaidOrderMap)
+      .filter(on => on.startsWith(ymPrefix) && on.length === ymPrefix.length + 4)
+      .map(on => parseInt(on.slice(ymPrefix.length), 10));
+    const maxRunWithUnpaid = allUnpaidRunsForPrefix.length > 0
+      ? Math.max(maxRun, ...allUnpaidRunsForPrefix)
+      : maxRun;
+
+    for (let run = minRun; run <= maxRunWithUnpaid; run++) {
       const items = runMap[run];
+      const emptyNo = `${ymPrefix}${String(run).padStart(4, '0')}`;
+      const unpaidR = unpaidOrderMap[emptyNo];
+
       if (!items) {
-        // เลขที่ขาด — แถวว่างสีเทาอ่อน
-        const emptyNo = `${ymPrefix}${String(run).padStart(4, '0')}`;
-        rows += `<tr style="background:#f9f9f9;color:#bbb;">
-          <td style="border:1px solid #ddd;padding:4px 6px;text-align:center;">—</td>
-          <td style="border:1px solid #ddd;padding:4px 6px;font-size:11px;">${emptyNo} <span style="color:#ccc;">(ขาด)</span></td>
-          <td style="border:1px solid #ddd;padding:4px 6px;" colspan="4"></td>
-        </tr>`;
+        if (unpaidR) {
+          // เลขนี้มีอยู่ แต่ยัง unpaid
+          unpaidInRange++;
+          const unpaidDate = (unpaidR.created_at || unpaidR.start || '').slice(0,10);
+          const unpaidNote = unpaidR.unpaid_note || '';
+          const unpaidAmt  = Number(unpaidR.deposit||0) + Number(unpaidR.fine||0);
+          rows += `<tr style="background:#fffbe6;">
+            <td style="border:1px solid #e6c900;padding:4px 6px;text-align:center;color:#7a6300;">⏳</td>
+            <td style="border:1px solid #e6c900;padding:4px 6px;font-weight:700;color:#7a6300;">${emptyNo}</td>
+            <td style="border:1px solid #e6c900;padding:4px 6px;color:#7a6300;">${formatDate(unpaidDate)}</td>
+            <td style="border:1px solid #e6c900;padding:4px 6px;color:#7a6300;">${unpaidR.customer || '—'} <span style="font-size:9px;background:#e6c900;color:#5a3d00;padding:1px 5px;border-radius:4px;margin-left:4px;">⚠ ยังไม่ชำระ</span>${unpaidNote ? '<br><span style="font-size:10px;color:#9a6e1a;">📝 ' + unpaidNote + '</span>' : ''}</td>
+            <td style="border:1px solid #e6c900;padding:4px 6px;text-align:center;color:#7a6300;">—</td>
+            <td style="border:1px solid #e6c900;padding:4px 6px;text-align:right;color:#9a6e1a;font-style:italic;">(${unpaidAmt.toLocaleString()})</td>
+          </tr>`;
+        } else {
+          // เลขที่ขาดจริง
+          rows += `<tr style="background:#f9f9f9;color:#bbb;">
+            <td style="border:1px solid #ddd;padding:4px 6px;text-align:center;">—</td>
+            <td style="border:1px solid #ddd;padding:4px 6px;font-size:11px;">${emptyNo} <span style="color:#ccc;">(ขาด)</span></td>
+            <td style="border:1px solid #ddd;padding:4px 6px;" colspan="4"></td>
+          </tr>`;
+        }
         continue;
       }
       rowNum++;
@@ -1382,11 +1450,15 @@ function printAccountingSummary(method) {
     const dupBanner = dupTotal > 0
       ? `<div style="background:#ffe3e3;border:1.5px solid #c00;border-radius:4px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:#c00;font-weight:700;">⚠ พบเลขที่ซ้ำ ${dupTotal} รายการ — แก้อัตโนมัติก่อนส่งบัญชี</div>`
       : '';
+    const unpaidBanner = unpaidInRange > 0
+      ? `<div style="background:#fffbe6;border:1.5px solid #e6c900;border-radius:4px;padding:6px 10px;margin-bottom:8px;font-size:11px;color:#7a6300;font-weight:700;">⏳ พบ ${unpaidInRange} รายการ ยังไม่ชำระเงิน — แสดงสีเหลืองในตาราง (ไม่รวมในยอดรวม)</div>`
+      : '';
 
     return `
       <div style="margin-bottom:14px;">
         <div style="font-size:13px;font-weight:700;margin-bottom:6px;padding:4px 8px;background:#f0f0f0;border-left:4px solid #555;">${label} — ${rowNum} รายการ</div>
         ${dupBanner}
+        ${unpaidBanner}
         <table style="width:100%;border-collapse:collapse;font-size:11px;">
           <thead><tr style="background:#eee;">
             <th style="border:1px solid #999;padding:4px;">#</th>
@@ -1398,10 +1470,13 @@ function printAccountingSummary(method) {
           </tr></thead>
           <tbody>${rows}</tbody>
           <tfoot><tr style="background:#f5f5f5;font-weight:700;">
-            <td colspan="5" style="border:1px solid #999;padding:5px;text-align:right;">รวม ${label}</td>
+            <td colspan="5" style="border:1px solid #999;padding:5px;text-align:right;">รวม ${label} (เฉพาะ paid)</td>
             <td style="border:1px solid #999;padding:5px;text-align:right;">${subtotal.toLocaleString()}</td>
           </tr></tfoot>
         </table>
+        <div style="font-size:9px;color:#888;margin-top:4px;display:flex;gap:10px;">
+          <span>⬜ ปกติ</span><span style="color:#e6c900;">⬛ ยังไม่ชำระ (ไม่รวมยอด)</span><span style="color:#bbb;">⬛ เลขขาด</span><span style="color:#c00;">⬛ ซ้ำ</span>
+        </div>
         <div style="font-size:11px;margin-top:4px;">( ${bahtText(subtotal)} )</div>
         ${legacyList.length > 0 ? `
           <div style="margin-top:8px;padding:6px 10px;background:#fffbe6;border:1px solid #e6c900;border-radius:6px;font-size:10px;color:#7a6300;">
@@ -1410,6 +1485,40 @@ function printAccountingSummary(method) {
           </div>` : ''}
       </div>`;
   }
+
+  // unpaid ที่ไม่มี order_no (ยังรอลูกค้า หรือยังไม่ได้กด paid) — แสดงส่วนท้าย
+  const unpaidNoOrderNo = unpaidFiltered.filter(r => !r.order_no);
+  const unpaidNoOrderHtml = unpaidNoOrderNo.length > 0 ? `
+    <div style="margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px;padding:4px 8px;background:#fffbe6;border-left:4px solid #e6c900;color:#7a6300;">
+        ⏳ รอชำระ / ยังไม่มีเลขใบเสร็จ — ${unpaidNoOrderNo.length} รายการ
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr style="background:#fffbe6;">
+          <th style="border:1px solid #e6c900;padding:4px;">วันที่</th>
+          <th style="border:1px solid #e6c900;padding:4px;">ลูกค้า</th>
+          <th style="border:1px solid #e6c900;padding:4px;">วิธีชำระ</th>
+          <th style="border:1px solid #e6c900;padding:4px;">สถานะ</th>
+          <th style="border:1px solid #e6c900;padding:4px;">จำนวนเงิน</th>
+          <th style="border:1px solid #e6c900;padding:4px;">หมายเหตุ</th>
+        </tr></thead>
+        <tbody>
+          ${unpaidNoOrderNo.map(r => {
+            const d = (r.created_at||r.start||'').slice(0,10);
+            const amt = Number(r.deposit||0) + Number(r.fine||0);
+            return `<tr style="background:#fffef0;">
+              <td style="border:1px solid #e6c900;padding:4px 6px;">${formatDate(d)}</td>
+              <td style="border:1px solid #e6c900;padding:4px 6px;font-weight:600;">${r.customer||'—'}</td>
+              <td style="border:1px solid #e6c900;padding:4px 6px;">${r.payment_method==='transfer'?'โอน (RE)':'เงินสด (CS)'}</td>
+              <td style="border:1px solid #e6c900;padding:4px 6px;color:#7a6300;">${r.status||'—'}</td>
+              <td style="border:1px solid #e6c900;padding:4px 6px;text-align:right;font-style:italic;color:#9a6e1a;">(${amt.toLocaleString()})</td>
+              <td style="border:1px solid #e6c900;padding:4px 6px;color:#9a6e1a;">${r.unpaid_note||''}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      <div style="font-size:10px;color:#9a6e1a;margin-top:4px;">* รายการนี้ยังไม่รวมในยอดรวม — ต้องยืนยันการชำระก่อน</div>
+    </div>` : '';
 
   const reTotal = reBookings.reduce((s, items) => s + Number(items[0].deposit||0), 0);
   const csTotal = csBookings.reduce((s, items) => s + Number(items[0].deposit||0), 0);
@@ -1423,6 +1532,7 @@ function printAccountingSummary(method) {
     </div>
     ${buildTable(reBookings, 'RE')}
     ${buildTable(csBookings, 'CS')}
+    ${unpaidNoOrderHtml}
     <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;">
       <tr style="background:#2d1f1a;color:white;font-weight:700;">
         <td style="padding:8px 10px;text-align:right;">รวมทั้งสิ้น (${reBookings.length + csBookings.length} คิว)</td>
@@ -1695,59 +1805,91 @@ function renderSalesContent() {
     adminMap[key].bookings.add(r.booking_id || r.rental_id);
   });
 
-  // กราฟรายวันใน range (ถ้า range ≤ 31 วัน)
+
+
+  // ── กราฟแท่งรายวัน ย้อนหลัง 20 วัน (โชว์เสมอ) ──
   const fromDate = from ? new Date(from) : null;
   const toDate   = new Date(to);
   const diffDays = fromDate ? Math.ceil((toDate - fromDate) / 86400000) + 1 : 0;
   let chartHtml = '';
-  if (fromDate && diffDays <= 31) {
+
+  const buildDailyChart = (dayList, allRentals) => {
     const dayMap = {};
-    filtered.forEach(r => {
+    allRentals.forEach(r => {
+      if (r.payment_status === 'unpaid') return;
       const d = (r.created_at || r.start || '').slice(0,10);
-      dayMap[d] = (dayMap[d] || 0) + Number(r.deposit||0) + Number(r.fine||0);
+      if (d) dayMap[d] = (dayMap[d] || 0) + Number(r.deposit||0) + Number(r.fine||0);
     });
-    const days = [];
-    for (let i = 0; i < diffDays; i++) {
-      const d = new Date(fromDate); d.setDate(d.getDate() + i);
-      const k = d.toISOString().slice(0,10);
-      days.push({ label: `${d.getDate()}`, amount: dayMap[k] || 0 });
-    }
-    const maxDay = Math.max(...days.map(d => d.amount), 1);
-    chartHtml = `
-      <div style="background:white;border-radius:14px;padding:16px;margin-bottom:14px;border:1px solid rgba(200,114,106,0.08);box-shadow:var(--card-shadow);">
-        <div style="font-size:13px;font-weight:600;margin-bottom:12px;">ยอดรายวัน</div>
-        <div style="display:flex;align-items:flex-end;gap:${diffDays > 14 ? 3 : 6}px;height:100px;overflow-x:auto;">
-          ${days.map(d => {
-            const h = d.amount > 0 ? Math.max(4, (d.amount/maxDay)*80) : 2;
-            return `<div style="flex-shrink:0;${diffDays>14?'width:14px':'flex:1'};display:flex;flex-direction:column;align-items:center;gap:2px;">
-              <div style="width:100%;background:${d.amount>0?'var(--rose)':'rgba(200,114,106,0.1)'};height:${h}%;border-radius:4px 4px 0 0;"></div>
-              <div style="font-size:8px;color:var(--ink-muted);">${d.label}</div>
+    const maxDay = Math.max(...dayList.map(d => dayMap[d.key] || 0), 1);
+    const totalDays = dayList.length;
+    return `
+      <div style="background:white;border-radius:14px;padding:14px 12px 12px;margin-bottom:14px;border:1px solid rgba(200,114,106,0.08);box-shadow:var(--card-shadow);">
+        <div style="font-size:13px;font-weight:600;margin-bottom:2px;">${dayList.length <= 7 ? 'ยอดรายวัน' : `ยอดรายวัน (ย้อนหลัง ${totalDays} วัน)`}</div>
+        <div style="font-size:10px;color:var(--ink-muted);margin-bottom:10px;">${dayList[0].display} – ${dayList[dayList.length-1].display}</div>
+        <div style="display:flex;align-items:flex-end;gap:${totalDays > 14 ? 3 : 5}px;height:120px;">
+          ${dayList.map(d => {
+            const amt = dayMap[d.key] || 0;
+            const h = amt > 0 ? Math.max(6, (amt/maxDay)*84) : 3;
+            const isToday = d.key === getToday();
+            const labelAmt = amt >= 1000 ? (amt/1000).toFixed(amt>=10000?0:1)+'k' : (amt > 0 ? amt : '');
+            return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;">
+              <div style="font-size:7px;color:var(--rose-dark);font-weight:600;white-space:nowrap;height:12px;line-height:12px;">${labelAmt}</div>
+              <div style="width:100%;background:${amt>0?(isToday?'var(--rose-dark)':'var(--rose)'):'rgba(200,114,106,0.12)'};height:${h}%;border-radius:4px 4px 0 0;"></div>
+              <div style="font-size:${totalDays>14?'7':'8'}px;color:${isToday?'var(--rose-dark)':'var(--ink-muted)'};font-weight:${isToday?700:400};">${d.label}</div>
             </div>`;
           }).join('')}
         </div>
+        <div style="display:flex;gap:12px;margin-top:8px;font-size:9px;color:var(--ink-muted);">
+          <span><span style="display:inline-block;width:8px;height:8px;background:var(--rose);border-radius:2px;margin-right:3px;"></span>มียอด</span>
+          <span><span style="display:inline-block;width:8px;height:8px;background:var(--rose-dark);border-radius:2px;margin-right:3px;"></span>วันนี้</span>
+          <span><span style="display:inline-block;width:8px;height:8px;background:rgba(200,114,106,0.12);border-radius:2px;margin-right:3px;"></span>ไม่มียอด</span>
+        </div>
       </div>`;
-  } else if (!fromDate || diffDays > 31) {
-    // กราฟ monthly
+  };
+
+  const monthNamesChart = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+
+  if (fromDate && diffDays <= 31) {
+    // กราฟตาม date range ที่เลือก
+    const dayList = [];
+    for (let i = 0; i < diffDays; i++) {
+      const d = new Date(fromDate); d.setDate(d.getDate() + i);
+      const k = d.toISOString().slice(0,10);
+      dayList.push({ key: k, label: `${d.getDate()}`, display: `${d.getDate()} ${monthNamesChart[d.getMonth()]}` });
+    }
+    chartHtml = buildDailyChart(dayList, rentals);
+  } else {
+    // ย้อนหลัง 20 วัน จาก to หรือวันนี้
+    const refDate = toDate;
+    const dayList = [];
+    for (let i = 19; i >= 0; i--) {
+      const d = new Date(refDate); d.setDate(d.getDate() - i);
+      const k = d.toISOString().slice(0,10);
+      dayList.push({ key: k, label: `${d.getDate()}/${d.getMonth()+1}`, display: `${d.getDate()} ${monthNamesChart[d.getMonth()]}` });
+    }
+    chartHtml = buildDailyChart(dayList, rentals);
+
+    // กราฟ 6 เดือนล่าสุด (เพิ่มเติม)
     const todayObj = new Date();
     const months = [];
     for (let i = 5; i >= 0; i--) {
       const d2 = new Date(todayObj.getFullYear(), todayObj.getMonth() - i, 1);
       const k = `${d2.getFullYear()}-${String(d2.getMonth()+1).padStart(2,'0')}`;
-      const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-      const amt = filtered.filter(r => (r.created_at||r.start||'').slice(0,7) === k)
-                          .reduce((s,r) => s + Number(r.deposit||0) + Number(r.fine||0), 0);
-      months.push({ label: monthNames[d2.getMonth()], amount: amt });
+      const amt = rentals.filter(r => r.payment_status !== 'unpaid' && (r.created_at||r.start||'').slice(0,7) === k)
+                         .reduce((s,r) => s + Number(r.deposit||0) + Number(r.fine||0), 0);
+      months.push({ label: monthNamesChart[d2.getMonth()], amount: amt });
     }
     const maxM = Math.max(...months.map(m => m.amount), 1);
-    chartHtml = `
-      <div style="background:white;border-radius:14px;padding:16px;margin-bottom:14px;border:1px solid rgba(200,114,106,0.08);box-shadow:var(--card-shadow);">
-        <div style="font-size:13px;font-weight:600;margin-bottom:12px;">ยอด 6 เดือนล่าสุด</div>
-        <div style="display:flex;align-items:flex-end;gap:8px;height:100px;">
+    chartHtml += `
+      <div style="background:white;border-radius:14px;padding:14px 12px 12px;margin-bottom:14px;border:1px solid rgba(200,114,106,0.08);box-shadow:var(--card-shadow);">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">ยอด 6 เดือนล่าสุด</div>
+        <div style="display:flex;align-items:flex-end;gap:8px;height:90px;">
           ${months.map(m => {
-            const h = m.amount > 0 ? Math.max(4, (m.amount/maxM)*80) : 2;
+            const h = m.amount > 0 ? Math.max(6, (m.amount/maxM)*80) : 3;
+            const labelAmt = m.amount >= 1000 ? (m.amount/1000).toFixed(1)+'k' : (m.amount > 0 ? m.amount : '');
             return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">
-              <div style="font-size:8px;color:var(--ink-muted);">${m.amount>0?(m.amount>=1000?(m.amount/1000).toFixed(1)+'k':m.amount):''}</div>
-              <div style="width:100%;background:${m.amount>0?'var(--rose)':'rgba(200,114,106,0.1)'};height:${h}%;border-radius:4px 4px 0 0;"></div>
+              <div style="font-size:8px;color:var(--rose-dark);font-weight:600;height:11px;">${labelAmt}</div>
+              <div style="width:100%;background:${m.amount>0?'var(--rose)':'rgba(200,114,106,0.12)'};height:${h}%;border-radius:4px 4px 0 0;"></div>
               <div style="font-size:9px;color:var(--ink-muted);">${m.label}</div>
             </div>`;
           }).join('')}
@@ -1868,80 +2010,107 @@ function setDashboardFilter(f) {
 
 function renderDashboard() {
   const today  = getToday();
-  // คิวที่ "ล็อคแล้ว" = ชำระแล้ว (payment_status ไม่ใช่ 'unpaid') — คิวเก่าที่ไม่มีสถานะถือว่าล็อคแล้ว
   const isPending = r => r.payment_status === 'unpaid';
   const active = rentals.filter(r => r.status === 'active');
   const paidActive = active.filter(r => !isPending(r));
   const pendingAll = rentals.filter(r => isPending(r) && r.status === 'active');
   renderConflicts(paidActive);
 
-  const due     = paidActive.filter(r => r.end <= today);
-  const ongoing = paidActive.filter(r => r.end > today);
-  const sendToday = paidActive.filter(r => r.start === today && (r.delivery === 'mail' || r.delivery === 'parcel'));
+  // ── ช่องค้นหา ──
+  const q = (document.getElementById('dashboard-search')?.value || '').trim().toLowerCase();
+  const matchQ = (rows) => {
+    if (!q) return rows;
+    return rows.filter(r => {
+      const bid = (r.booking_id || r.rental_id || '').toLowerCase();
+      const on  = (r.order_no  || '').toLowerCase();
+      const cust = (r.customer || '').toLowerCase();
+      const phone = (r.phone   || '').toLowerCase();
+      const code = (r.clothes_id || '').toLowerCase();
+      return on.includes(q) || cust.includes(q) || phone.includes(q) || bid.includes(q) || code.includes(q);
+    });
+  };
+
+  const due     = matchQ(paidActive.filter(r => r.end <= today));
+  const ongoing = matchQ(paidActive.filter(r => r.end > today));
 
   const el = document.getElementById('dashboard-filter-content');
 
   if (dashboardFilter === 'pending') {
-    const cnt = new Set(pendingAll.map(r => r.booking_id || r.rental_id)).size;
+    const filtered = matchQ(pendingAll);
+    const cnt = new Set(filtered.map(r => r.booking_id || r.rental_id)).size;
     el.innerHTML =
       `<div class="section-header"><div class="section-heading"><i class="fa-solid fa-clock" style="margin-right:6px;color:var(--gold);"></i>รอลูกค้าชำระเงิน (${cnt} คิว)</div></div>` +
-      `<div style="background:rgba(154,110,26,0.08);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--ink-muted);display:flex;align-items:flex-start;gap:8px;">
+      (!q ? `<div style="background:rgba(154,110,26,0.08);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:var(--ink-muted);display:flex;align-items:flex-start;gap:8px;">
         <i class="fa-solid fa-circle-info" style="color:var(--gold);margin-top:1px;flex-shrink:0;"></i>
         <span>คิวเหล่านี้ <strong>ยังไม่ถูกล็อค</strong> รอลูกค้ากรอกข้อมูล+ชำระเงินผ่านลิงก์ เมื่อชำระแล้วจะย้ายไปคิวทั้งหมดอัตโนมัติ</span>
-      </div>` +
-      (pendingAll.length === 0
-        ? `<div class="empty-state"><i class="fa-solid fa-circle-check"></i><p>ไม่มีคิวที่รอชำระ</p></div>`
-        : renderGroupedCards(pendingAll, today));
+      </div>` : '') +
+      (filtered.length === 0
+        ? `<div class="empty-state"><i class="fa-solid fa-circle-check"></i><p>${q ? 'ไม่พบผลการค้นหา' : 'ไม่มีคิวที่รอชำระ'}</p></div>`
+        : renderGroupedCards(filtered, today));
   } else if (dashboardFilter === 'return') {
-    el.innerHTML = `<div class="section-header"><div class="section-heading"><i class="fa-solid fa-bell" style="margin-right:6px;color:var(--gold);"></i>รับคืนวันนี้ (${new Set(due.map(r=>r.booking_id||r.rental_id)).size} คิว)</div></div>` +
+    const cnt = new Set(due.map(r=>r.booking_id||r.rental_id)).size;
+    el.innerHTML = `<div class="section-header"><div class="section-heading"><i class="fa-solid fa-bell" style="margin-right:6px;color:var(--gold);"></i>รับคืนวันนี้ (${cnt} คิว)</div></div>` +
       (due.length === 0
-        ? `<div class="empty-state"><i class="fa-solid fa-circle-check"></i><p>ไม่มีรายการรับคืนวันนี้</p></div>`
+        ? `<div class="empty-state"><i class="fa-solid fa-circle-check"></i><p>${q ? 'ไม่พบผลการค้นหา' : 'ไม่มีรายการรับคืนวันนี้'}</p></div>`
         : renderGroupedCards(due, today));
   } else if (dashboardFilter === 'send') {
     const sendDate = document.getElementById('send-date-picker')?.value || today;
-    const sendItems = paidActive.filter(r => {
-      if (r.delivery !== 'mail' && r.delivery !== 'parcel') return false;
-      // ส่งวันนี้ = วันรับชุด (start) ตรงกับวันที่เลือก
-      // หรือ start วันถัดไป (ส่งวันนี้เพื่อให้ลูกค้าได้รับพรุ่งนี้)
-      if (r.start === sendDate) return true;
-      // ให้แสดงถ้า start คือวันถัดไปจากวันที่เลือก (ส่งวันก่อนล่วงหน้า)
-      const nextDay = new Date(sendDate); nextDay.setDate(nextDay.getDate() + 1);
-      const nextStr = `${nextDay.getFullYear()}-${String(nextDay.getMonth()+1).padStart(2,'0')}-${String(nextDay.getDate()).padStart(2,'0')}`;
-      if (r.start === nextStr) return true;
-      return false;
+    const sendRaw = rentals.filter(r => {
+      if (r.payment_status === 'unpaid') return false;
+      const isPickup = r.delivery === 'pickup' || !r.delivery;
+      const isSend   = r.delivery === 'mail' || r.delivery === 'parcel';
+      if (!isPickup && !isSend) return false;
+      return r.start === sendDate;
     });
-    const sendCount = new Set(sendItems.map(r=>r.booking_id||r.rental_id)).size;
-    el.innerHTML = `<div class="section-header"><div class="section-heading"><i class="fa-solid fa-truck-fast" style="margin-right:6px;color:var(--rose);"></i>ส่งของ (${sendCount} คิว)</div></div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-        <label style="font-size:12px;color:var(--ink-muted);white-space:nowrap;">เลือกวันที่ส่ง:</label>
-        <input type="date" id="send-date-picker" class="form-input" value="${sendDate}" oninput="renderDashboard()" style="flex:1;padding:8px 10px;font-size:13px;">
-      </div>` +
+    const sendItems = matchQ(sendRaw);
+    const sendCount  = new Set(sendItems.map(r=>r.booking_id||r.rental_id)).size;
+    const shipCount  = new Set(sendItems.filter(r=>r.delivery==='mail'||r.delivery==='parcel').map(r=>r.booking_id||r.rental_id)).size;
+    const pickCount  = sendCount - shipCount;
+    const countLabel = [shipCount > 0 ? `ส่งออก ${shipCount}` : '', pickCount > 0 ? `มารับเอง ${pickCount}` : ''].filter(Boolean).join(' · ');
+    el.innerHTML = `<div class="section-header"><div class="section-heading"><i class="fa-solid fa-truck-fast" style="margin-right:6px;color:var(--rose);"></i>วันนี้ (${sendCount} คิว${countLabel ? ' — ' + countLabel : ''})</div></div>
+      <label for="send-date-picker" style="display:flex;align-items:center;gap:10px;margin-bottom:12px;background:white;border:2px solid var(--rose);border-radius:12px;padding:10px 14px;cursor:pointer;">
+        <i class="fa-solid fa-calendar-days" style="color:var(--rose);font-size:15px;flex-shrink:0;"></i>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:10px;color:var(--rose-dark);font-weight:700;letter-spacing:0.04em;margin-bottom:2px;">เลือกวันที่</div>
+          <input type="date" id="send-date-picker" value="${sendDate}" oninput="renderDashboard()" style="width:100%;border:none;outline:none;background:transparent;font-size:14px;font-weight:700;color:var(--ink);font-family:'Prompt',sans-serif;cursor:pointer;padding:0;">
+        </div>
+        <i class="fa-solid fa-chevron-down" style="color:var(--rose);font-size:11px;flex-shrink:0;"></i>
+      </label>` +
       (sendItems.length === 0
-        ? `<div class="empty-state"><i class="fa-solid fa-truck-fast"></i><p>ไม่มีรายการส่งในวันที่เลือก</p></div>`
-        : `<button onclick="printShippingList('${sendDate}')" style="width:100%;margin-bottom:8px;padding:12px;background:var(--ink);color:white;border:none;border-radius:12px;font-family:'Prompt',sans-serif;font-size:14px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-print" style="margin-right:6px;"></i>สรุปรายการส่งทั้งหมด (ปริ้นทีเดียว)</button>
-        <button onclick="copyShippingText('${sendDate}')" style="width:100%;margin-bottom:12px;padding:12px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:12px;font-family:'Prompt',sans-serif;font-size:14px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-copy" style="margin-right:6px;color:var(--rose);"></i>คัดลอกเป็นข้อความ</button>` + renderGroupedCards(sendItems, today));
+        ? `<div class="empty-state"><i class="fa-solid fa-truck-fast"></i><p>${q ? 'ไม่พบผลการค้นหา' : 'ไม่มีรายการในวันที่เลือก'}</p></div>`
+        : `<div style="display:flex;gap:8px;margin-bottom:12px;">
+          <button onclick="printShippingList('${sendDate}')" style="flex:1;padding:10px 6px;background:var(--ink);color:white;border:none;border-radius:12px;font-family:'Prompt',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;"><i class="fa-solid fa-print"></i>สรุปรายการ</button>
+          <button onclick="copyShippingText('${sendDate}')" style="flex:1;padding:10px 6px;background:var(--cream);color:var(--ink);border:1.5px solid var(--rose);border-radius:12px;font-family:'Prompt',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;"><i class="fa-solid fa-copy" style="color:var(--rose);"></i>คัดลอกข้อความ</button>
+        </div>` + renderGroupedCards(sendItems, today));
   } else {
-    // all — เฉพาะคิวที่ชำระแล้ว + ยังไม่ถึงกำหนดคืน
-    const allCount = new Set(ongoing.map(r => r.booking_id || r.rental_id)).size;
+    // all tab — ถ้าไม่ได้ค้นหา: แสดงเฉพาะคิว active ที่ยังไม่ถึงกำหนด
+    //           ถ้าค้นหา: ค้นในทุกคิว active (รวมเลยกำหนดแล้ว) + returned ด้วย
+    let displayList;
+    if (q) {
+      // ค้นใน rentals ทั้งหมด (active + returned) เพื่อให้เจอทุกกรณี
+      const allRentals = matchQ(rentals.filter(r => !isPending(r)));
+      displayList = allRentals;
+    } else {
+      displayList = ongoing;
+    }
+    const allCount = new Set(displayList.map(r => r.booking_id || r.rental_id)).size;
     const pendCnt = new Set(pendingAll.map(r => r.booking_id || r.rental_id)).size;
     el.innerHTML =
-      `<div class="section-header"><div class="section-heading"><i class="fa-solid fa-clipboard-list" style="margin-right:6px;color:var(--ink-light);"></i>คิวทั้งหมด (${allCount} คิว)</div></div>` +
-      (pendCnt > 0 ? `<div onclick="setDashboardFilter('pending')" style="background:rgba(154,110,26,0.1);border:1px solid rgba(154,110,26,0.2);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#9a6e1a;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:space-between;"><span><i class="fa-solid fa-clock" style="margin-right:6px;"></i>มี ${pendCnt} คิวรอลูกค้าชำระ</span><i class="fa-solid fa-chevron-right"></i></div>` : '') +
-      (ongoing.length === 0
-        ? `<div class="empty-state"><i class="fa-solid fa-shirt"></i><p>ไม่มีชุดที่กำลังเช่าอยู่</p></div>`
-        : renderGroupedCards(ongoing, today));
+      `<div class="section-header"><div class="section-heading"><i class="fa-solid fa-clipboard-list" style="margin-right:6px;color:var(--ink-light);"></i>${q ? 'ผลการค้นหา' : 'คิวทั้งหมด'} (${allCount} คิว)</div></div>` +
+      (!q && pendCnt > 0 ? `<div onclick="setDashboardFilter('pending')" style="background:rgba(154,110,26,0.1);border:1px solid rgba(154,110,26,0.2);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#9a6e1a;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:space-between;"><span><i class="fa-solid fa-clock" style="margin-right:6px;"></i>มี ${pendCnt} คิวรอลูกค้าชำระ</span><i class="fa-solid fa-chevron-right"></i></div>` : '') +
+      (displayList.length === 0
+        ? `<div class="empty-state"><i class="fa-solid fa-shirt"></i><p>${q ? 'ไม่พบผลการค้นหา' : 'ไม่มีชุดที่กำลังเช่าอยู่'}</p></div>`
+        : renderGroupedCards(displayList, today));
   }
 }
 
 function printShippingList(sendDate) {
   const d = sendDate || getToday();
-  const nextDay = new Date(d); nextDay.setDate(nextDay.getDate() + 1);
-  const nextStr = `${nextDay.getFullYear()}-${String(nextDay.getMonth()+1).padStart(2,'0')}-${String(nextDay.getDate()).padStart(2,'0')}`;
   const sendItems = rentals.filter(r =>
     r.status === 'active' &&
     r.payment_status !== 'unpaid' &&
     (r.delivery === 'mail' || r.delivery === 'parcel') &&
-    (r.start === d || r.start === nextStr)
+    r.start === d
   );
   if (sendItems.length === 0) { showToast('ไม่มีรายการส่งในวันที่เลือก', 'err'); return; }
 
@@ -1987,13 +2156,11 @@ function printShippingList(sendDate) {
 
 async function copyShippingText(sendDate) {
   const d = sendDate || getToday();
-  const nextDay = new Date(d); nextDay.setDate(nextDay.getDate() + 1);
-  const nextStr = `${nextDay.getFullYear()}-${String(nextDay.getMonth()+1).padStart(2,'0')}-${String(nextDay.getDate()).padStart(2,'0')}`;
   const sendItems = rentals.filter(r =>
     r.status === 'active' &&
     r.payment_status !== 'unpaid' &&
     (r.delivery === 'mail' || r.delivery === 'parcel') &&
-    (r.start === d || r.start === nextStr)
+    r.start === d
   );
   if (sendItems.length === 0) { showToast('ไม่มีรายการส่งในวันที่เลือก', 'err'); return; }
 
@@ -2120,13 +2287,23 @@ function renderGroupedCards(list, today) {
 
   return sorted.map(([bid, items]) => {
     const first = items[0];
-    const over = first.end < today;
+    const isActive    = items.some(r => r.status === 'active');
+    const allReturned = items.every(r => r.status === 'returned');
+    // "เกินกำหนด" แสดงเฉพาะคิวที่ active และเลยกำหนดคืน
+    const over = first.end < today && isActive;
     const delivery = (first.delivery || 'pickup').toLowerCase();
     const delIcon = delivery === 'mail'
       ? `<span style="font-size:10px;color:var(--rose);margin-left:6px;"><i class="fa-solid fa-truck-fast"></i> ส่งแมส</span>`
       : delivery === 'parcel'
       ? `<span style="font-size:10px;color:var(--rose);margin-left:6px;"><i class="fa-solid fa-box"></i> ส่งพัสดุ</span>`
       : `<span style="font-size:10px;color:var(--ink-muted);margin-left:6px;"><i class="fa-solid fa-store"></i> รับเอง</span>`;
+
+    // status badge ขวาบน
+    const statusBadge = allReturned
+      ? `<span style="background:var(--green-light);color:var(--green);font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">คืนแล้ว</span>`
+      : over
+      ? `<span style="background:#ffe3e3;color:#c74545;font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;"><i class="fa-solid fa-triangle-exclamation" style="margin-right:3px;"></i>เกินกำหนด</span>`
+      : `<span style="background:var(--rose-light);color:var(--rose);font-size:10px;font-weight:700;padding:3px 10px;border-radius:20px;">กำลังเช่า</span>`;
 
     const dressRows = items.map(r => {
       const d = inventory.find(i => i.id === r.clothes_id);
@@ -2135,7 +2312,10 @@ function renderGroupedCards(list, today) {
         <span class="dress-code" style="font-size:10px;">${r.clothes_id}</span>
         ${d ? `<span style="font-size:11px;color:var(--ink-muted);flex:1;">${d.name}</span>` : '<span style="flex:1;"></span>'}
         ${price ? `<span style="font-size:11px;font-weight:700;color:var(--rose);">${CURRENCY}${price.toLocaleString()}</span>` : ''}
-        <button onclick="openReturnModal('${r.rental_id}','${r.clothes_id}')" style="background:var(--ink);color:white;border:none;padding:3px 8px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;white-space:nowrap;">รับคืน</button>
+        ${r.status === 'active'
+          ? `<button onclick="openReturnModal('${r.rental_id}','${r.clothes_id}')" style="background:var(--ink);color:white;border:none;padding:3px 8px;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;white-space:nowrap;">รับคืน</button>`
+          : `<span style="font-size:9px;color:var(--green);font-weight:600;">✓ คืนแล้ว</span>`}
+        ${r.status === 'active' && r.end < today ? `<span style="font-size:9px;color:#c74545;font-weight:700;">เกินกำหนด</span>` : ''}
       </div>`;
     }).join('');
 
@@ -2143,7 +2323,7 @@ function renderGroupedCards(list, today) {
       <div onclick="showBookingDetail('${bid}')" style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;cursor:pointer;">
         <div>
           <div class="card-customer" style="margin-bottom:2px;">${first.customer === 'รอลูกค้ากรอก' || !first.customer ? '<span style="color:var(--ink-muted);font-weight:600;font-style:italic;">รอลูกค้ากรอก</span>' : first.customer}${delIcon}</div>
-          <div class="date-highlight${over?' date-overdue':''}" style="font-size:11px;">${formatDate(first.start)} → ${formatDate(first.end)}${over?'<span class="tag-overdue"><i class="fa-solid fa-triangle-exclamation"></i> เกินกำหนด</span>':''}</div>
+          <div class="date-highlight${over?' date-overdue':''}" style="font-size:11px;">${formatDate(first.start)} → ${formatDate(first.end)}</div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px;">
             <div style="font-size:13px;font-weight:700;color:var(--rose);">${first.deposit ? CURRENCY + Number(first.deposit).toLocaleString() : '<span style="color:var(--ink-muted);font-weight:600;">ยังไม่ใส่ยอด</span>'}</div>
             ${first.payment_status !== 'unpaid'
@@ -2151,10 +2331,14 @@ function renderGroupedCards(list, today) {
               : `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--gold-light);color:#9a6e1a;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;"><i class="fa-solid fa-clock"></i>รอชำระ</span>`}
           </div>
         </div>
-        <div style="display:flex;gap:5px;align-items:center;">
-          <button onclick="event.stopPropagation();copyCustomerLink('${bid}')" title="คัดลอกลิงก์ให้ลูกค้า" style="background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.2);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-link"></i></button>
-          <button onclick="event.stopPropagation();showReceiptByBooking('${bid}')" title="ใบเสร็จ" style="background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.2);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-receipt"></i></button>
-          <i class="fa-solid fa-chevron-right" style="color:var(--ink-muted);font-size:11px;"></i>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;">
+          ${statusBadge}
+          <div style="display:flex;gap:5px;align-items:center;">
+            <button onclick="event.stopPropagation();copyCustomerLink('${bid}')" title="คัดลอกลิงก์ให้ลูกค้า" style="background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.2);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-link"></i></button>
+            <button onclick="event.stopPropagation();showReceiptByBooking('${bid}')" title="ใบเสร็จ" style="background:var(--cream);color:var(--ink);border:1px solid rgba(200,114,106,0.2);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-receipt"></i></button>
+            <button onclick="event.stopPropagation();deleteBooking('${bid}')" title="ลบคิวนี้" style="background:white;color:#c74545;border:1px solid rgba(199,69,69,0.25);padding:5px 7px;border-radius:8px;font-size:11px;cursor:pointer;"><i class="fa-solid fa-trash"></i></button>
+            <i class="fa-solid fa-chevron-right" style="color:var(--ink-muted);font-size:11px;"></i>
+          </div>
         </div>
       </div>
       <div style="background:var(--cream);border-radius:10px;padding:8px 10px;">
@@ -3095,8 +3279,18 @@ function openReturnModal(rentalId, clothesId) {
   document.getElementById('ret-note').value = '';
   document.getElementById('ret-fine').value = 0;
   document.getElementById('ret-repair').checked = false;
+  document.getElementById('ret-paid').checked = false;
+  document.getElementById('ret-paid-label').style.borderColor = 'transparent';
+  document.getElementById('ret-unpaid-note-wrap').style.display = 'none';
+  document.getElementById('ret-unpaid-note').value = '';
   updateReturnTotal();
   openModal('modal-return');
+}
+
+function onRetPaidChange() {
+  const checked = document.getElementById('ret-paid').checked;
+  document.getElementById('ret-paid-label').style.borderColor = checked ? 'var(--green)' : 'transparent';
+  document.getElementById('ret-unpaid-note-wrap').style.display = checked ? 'none' : '';
 }
 
 function updateReturnTotal() {
@@ -3120,9 +3314,28 @@ async function submitReturn(e) {
   const fine       = Number(document.getElementById('ret-fine').value || 0);
   const note       = document.getElementById('ret-note').value;
   const repair     = document.getElementById('ret-repair').checked;
+  const isPaid     = document.getElementById('ret-paid').checked;
+  const unpaidNote = document.getElementById('ret-unpaid-note').value.trim();
+
+  const r = rentals.find(x => x.rental_id === rental_id);
 
   // อัพเดต rental → returned
   const rentalUpdate = { status: 'returned', condition, fine, note };
+
+  // ถ้าติ๊ก "รับเงินแล้ว" → set paid + assign order_no (ถ้ายังไม่มี)
+  if (isPaid) {
+    rentalUpdate.payment_status = 'paid';
+    if (!r?.order_no) {
+      try {
+        const newOrderNo = await assignOrderNo(r?.payment_method || 'transfer');
+        rentalUpdate.order_no = newOrderNo;
+      } catch(ex) { console.warn('assignOrderNo failed', ex); }
+    }
+  } else if (unpaidNote) {
+    // บันทึกหมายเหตุ unpaid ไว้ใน note (append)
+    rentalUpdate.unpaid_note = unpaidNote;
+  }
+
   // อัพเดตสถานะชุด
   const dressStatus  = repair ? 'repairing' : 'available';
 
@@ -3133,7 +3346,6 @@ async function submitReturn(e) {
 
     // อัพเดต total_revenue + rental_count ในฝั่ง client แล้ว patch กลับ
     const d = inventory.find(i => i.id === clothes_id);
-    const r = rentals.find(x => x.rental_id === rental_id);
     if (d && r) {
       const newRevenue = Number(d.total_revenue || 0) + Number(r.deposit || 0) + fine;
       const newCount   = Number(d.rental_count  || 0) + 1;
@@ -3145,7 +3357,8 @@ async function submitReturn(e) {
 
     await refreshData();
     closeModal('modal-return');
-    showToast(`รับคืนชุด ${clothes_id} แล้ว`, 'ok');
+    const paidMsg = isPaid ? ' ✓ บันทึกชำระเงินแล้ว' : ' (ยังรอชำระ)';
+    showToast(`รับคืนชุด ${clothes_id} แล้ว${paidMsg}`, 'ok');
   } catch(err) { showToast(err.message, 'err'); }
   finally { setLoading(false); }
 }
@@ -4097,6 +4310,24 @@ let _cpToken = null, _cpRows = null, _cpSlipUrl = '', _cpIdUrl = '', _cpDelivery
 function cpEscape(s) {
   return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+// auto-fill ชื่อจากเบอร์เมื่อกรอกครบ (ใช้ lookupCustomer ที่มีอยู่แล้ว)
+let _cpPhoneLookupTimer = null;
+function cpAutoFillFromPhone(phone) {
+  clearTimeout(_cpPhoneLookupTimer);
+  const clean = phone.replace(/\D/g, '');
+  if (clean.length < 9) return;
+  _cpPhoneLookupTimer = setTimeout(async () => {
+    const cust = await lookupCustomer(phone);
+    if (!cust) return;
+    const nameEl = document.getElementById('cp-cust-name');
+    if (nameEl && !nameEl.value.trim()) {
+      nameEl.value = cust.name || '';
+      const note = document.getElementById('cp-autofill-note');
+      if (note) { note.style.display = 'flex'; setTimeout(() => { note.style.display = 'none'; }, 3000); }
+    }
+  }, 700);
+}
 function cpErrorCard(title, sub) {
   return `<div class="cp-card" style="text-align:center;padding:36px 20px;">
     <i class="fa-solid fa-circle-exclamation" style="font-size:40px;color:var(--rose);margin-bottom:14px;"></i>
@@ -4182,13 +4413,26 @@ function renderCustomerForm(rows) {
   body.innerHTML = summaryCard + `
     <div class="cp-card">
       <h3><i class="fa-solid fa-user"></i>ข้อมูลลูกค้า <span class="cp-required">*</span></h3>
-      <div style="margin-bottom:10px;">
-        <div class="cp-label">ชื่อ-นามสกุล <span class="cp-required">*</span></div>
-        <input type="text" id="cp-cust-name" class="cp-textarea" style="min-height:unset;height:42px;padding:10px 13px;" placeholder="กรอกชื่อ-นามสกุล" value="${cpEscape(first.customer !== 'รอลูกค้ากรอก' ? (first.customer||'') : '')}">
+
+      <div style="background:linear-gradient(135deg,#fff8f0,#ffe8db);border:1.5px solid rgba(200,114,106,0.3);border-radius:12px;padding:11px 14px;margin-bottom:14px;display:flex;align-items:flex-start;gap:10px;">
+        <i class="fa-solid fa-mobile-screen-button" style="color:var(--rose);font-size:16px;margin-top:1px;flex-shrink:0;"></i>
+        <div style="font-size:12px;color:var(--ink);line-height:1.5;">
+          <strong style="color:var(--rose-dark);">กรอกเบอร์โทรก่อนเลย!</strong><br>
+          ระบบจะดึงข้อมูลของคุณขึ้นมาให้อัตโนมัติ<br>
+          <span style="font-size:11px;color:var(--ink-muted);">หากเคยใช้บริการกับทาง TAPA มาก่อน</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <div class="cp-label">เบอร์โทรศัพท์ <span class="cp-required">*</span></div>
+        <input type="tel" id="cp-cust-phone" class="cp-textarea" style="min-height:unset;height:48px;padding:10px 13px;font-size:16px;font-weight:700;letter-spacing:0.05em;" placeholder="08x-xxx-xxxx" value="${cpEscape(first.phone||'')}" oninput="cpAutoFillFromPhone(this.value)">
       </div>
       <div>
-        <div class="cp-label">เบอร์โทรศัพท์ <span class="cp-required">*</span></div>
-        <input type="tel" id="cp-cust-phone" class="cp-textarea" style="min-height:unset;height:42px;padding:10px 13px;" placeholder="08x-xxx-xxxx" value="${cpEscape(first.phone||'')}">
+        <div class="cp-label">ชื่อ-นามสกุล <span class="cp-required">*</span></div>
+        <input type="text" id="cp-cust-name" class="cp-textarea" style="min-height:unset;height:42px;padding:10px 13px;" placeholder="กรอกชื่อ-นามสกุล" value="${cpEscape(first.customer !== 'รอลูกค้ากรอก' ? (first.customer||'') : '')}">
+        <div id="cp-autofill-note" style="display:none;align-items:center;gap:6px;margin-top:6px;padding:7px 10px;background:var(--green-light);border-radius:8px;font-size:11px;color:var(--green);font-weight:600;">
+          <i class="fa-solid fa-circle-check"></i> ดึงข้อมูลจากระบบแล้ว — ตรวจสอบความถูกต้องด้วยนะคะ
+        </div>
       </div>
     </div>
 

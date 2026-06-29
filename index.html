@@ -399,6 +399,11 @@
           <div class="brand-sub">Admin Panel</div>
         </div>
       </div>
+      <!-- badge ต้นทุน — โชว์เฉพาะตอนอยู่หน้าคลังชุด + เปิด cost filter -->
+      <div id="inv-cost-badge" style="display:none;flex-direction:column;align-items:center;gap:1px;">
+        <div style="font-size:18px;font-weight:700;line-height:1;" id="inv-cost-count">0</div>
+        <div style="font-size:9px;color:var(--ink-muted);font-weight:600;white-space:nowrap;" id="inv-cost-badge-label">ยังไม่ใส่ทุน</div>
+      </div>
       <div class="header-actions">
         <button id="admin-selector-btn" onclick="toggleAdminMenu(event)" style="display:flex;align-items:center;gap:4px;background:var(--cream);border:1.5px solid var(--rose);color:var(--ink);padding:7px 9px;border-radius:20px;font-family:'Prompt',sans-serif;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;max-width:96px;overflow:hidden;">
           <i class="fa-solid fa-user" style="color:var(--rose);font-size:12px;flex-shrink:0;"></i><span id="admin-current" style="overflow:hidden;text-overflow:ellipsis;"></span>
@@ -463,6 +468,7 @@
       <div style="display:flex;gap:8px;margin-bottom:10px;">
         <button onclick="setInventoryView(false)" id="inv-tab-active" class="sales-range-btn active" style="flex:1;"><i class="fa-solid fa-shirt" style="margin-right:4px;"></i>ชุดในคลัง</button>
         <button onclick="setInventoryView(true)" id="inv-tab-sold" class="sales-range-btn" style="flex:1;"><i class="fa-solid fa-tag" style="margin-right:4px;"></i>ขายแล้ว</button>
+        <button onclick="toggleInvCostFilter()" id="inv-tab-cost" class="sales-range-btn" style="flex:1;white-space:nowrap;"><i class="fa-solid fa-coins" style="margin-right:4px;"></i><span id="inv-tab-cost-label">ต้นทุน</span></button>
       </div>
       <div id="inv-grid" class="inv-grid"></div>
     </section>
@@ -2550,6 +2556,55 @@ function setInventoryView(showSold) {
   renderInventory();
 }
 
+// invCostMode: 0=ปกติ, 1=ยังไม่ใส่ทุน, 2=คุ้มทุนแล้ว
+let invCostMode = 0;
+let invCostFilterOn = false; // compat: true ถ้า mode!=0
+
+function toggleInvCostFilter() {
+  invCostMode = (invCostMode + 1) % 3;
+  invCostFilterOn = invCostMode !== 0;
+  const btn = document.getElementById('inv-tab-cost');
+  const btnLabel = document.getElementById('inv-tab-cost-label');
+  if (btn) btn.classList.toggle('active', invCostMode !== 0);
+  if (btnLabel) {
+    if (invCostMode === 0)      btnLabel.textContent = 'ต้นทุน';
+    else if (invCostMode === 1) btnLabel.textContent = 'ยังไม่ใส่ทุน';
+    else                        btnLabel.textContent = 'คุ้มทุนแล้ว';
+  }
+  updateInvCostBadge();
+  renderInventory();
+}
+
+function updateInvCostBadge() {
+  const badge   = document.getElementById('inv-cost-badge');
+  const countEl = document.getElementById('inv-cost-count');
+  const labelEl = document.getElementById('inv-cost-badge-label');
+  if (!badge || !countEl) return;
+  if (invCostMode === 0) {
+    badge.style.display = 'none';
+    return;
+  }
+  if (invCostMode === 1) {
+    const n = inventory.filter(i => i.status !== 'sold' && !Number(i.cost || 0)).length;
+    countEl.textContent = n;
+    countEl.style.color = '#c74545';
+    if (labelEl) labelEl.textContent = 'ยังไม่ใส่ทุน';
+  } else {
+    // คุ้มทุน = revenue >= cost > 0
+    const n = inventory.filter(i => {
+      const cost = Number(i.cost || 0);
+      if (cost <= 0 || i.status === 'sold') return false;
+      const rev = rentals.filter(r => r.clothes_id === i.id && r.status === 'returned')
+                         .reduce((s, r) => s + Number(r.item_price || i.price || 0), 0);
+      return rev >= cost;
+    }).length;
+    countEl.textContent = n;
+    countEl.style.color = 'var(--green)';
+    if (labelEl) labelEl.textContent = 'คุ้มทุนแล้ว';
+  }
+  badge.style.display = 'flex';
+}
+
 function renderInventory() {
   const q  = (document.getElementById('search-inv')?.value||'').toLowerCase();
   let fl = inventory.filter(i => (i.id||'').toLowerCase().includes(q) || (i.name||'').toLowerCase().includes(q) || (i.group_id||'').toLowerCase().includes(q));
@@ -2560,7 +2615,24 @@ function renderInventory() {
     fl = fl.filter(i => i.status !== 'sold');
   }
 
+  // helper: revenue ของชุด
+  const getDressRevenue = (i) => rentals
+    .filter(r => r.clothes_id === i.id && r.status === 'returned')
+    .reduce((s, r) => s + Number(r.item_price || i.price || 0), 0);
+
   fl.sort((a, b) => {
+    if (invCostMode === 1) {
+      // เรียงชุดไม่มีต้นทุนขึ้นก่อน
+      const aNoCost = !Number(a.cost || 0) ? 0 : 1;
+      const bNoCost = !Number(b.cost || 0) ? 0 : 1;
+      if (aNoCost !== bNoCost) return aNoCost - bNoCost;
+    } else if (invCostMode === 2) {
+      // เรียงชุดคุ้มทุนแล้วขึ้นก่อน
+      const isPaidOff = (i) => { const c = Number(i.cost||0); return c > 0 && getDressRevenue(i) >= c; };
+      const aOk = isPaidOff(a) ? 0 : 1;
+      const bOk = isPaidOff(b) ? 0 : 1;
+      if (aOk !== bOk) return aOk - bOk;
+    }
     const aRep = a.status === 'repairing' ? 0 : 1;
     const bRep = b.status === 'repairing' ? 0 : 1;
     return aRep - bRep;
@@ -2603,7 +2675,20 @@ function renderInventory() {
           <div class="inv-meta">ไซส์ ${i.size}</div>
         </div>
         <div class="inv-name">${i.name}</div>
-        <div class="inv-price">${CURRENCY}${Number(i.price).toLocaleString()}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <div class="inv-price">${CURRENCY}${Number(i.price).toLocaleString()}</div>
+          ${(() => {
+            const cost = Number(i.cost||0);
+            if (cost > 0) {
+              const rev = rentals.filter(r=>r.clothes_id===i.id&&r.status==='returned').reduce((s,r)=>s+Number(r.item_price||i.price||0),0);
+              const paidOff = rev >= cost;
+              if (invCostMode === 2 && paidOff)
+                return `<span style="font-size:9px;font-weight:700;color:var(--green);background:var(--green-light);padding:2px 6px;border-radius:8px;"><i class="fa-solid fa-circle-check" style="margin-right:2px;"></i>คุ้มทุนแล้ว</span>`;
+              return `<span style="font-size:9px;font-weight:600;color:var(--ink-muted);background:var(--cream);padding:2px 6px;border-radius:8px;"><i class="fa-solid fa-coins" style="margin-right:2px;opacity:0.6;"></i>${CURRENCY}${cost.toLocaleString()}</span>`;
+            }
+            return invCostMode === 1 ? `<span style="font-size:9px;font-weight:700;color:#c74545;background:#fff0f0;padding:2px 6px;border-radius:8px;">ยังไม่ใส่ทุน</span>` : '';
+          })()}
+        </div>
         ${repairBtn}
       </div>
     </div>`;
@@ -2637,7 +2722,15 @@ function renderInventory() {
           <div class="inv-dress-id">${gid}</div>
         </div>
         <div class="inv-name">${main.name}</div>
-        <div class="inv-price">${CURRENCY}${Number(main.price).toLocaleString()}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <div class="inv-price">${CURRENCY}${Number(main.price).toLocaleString()}</div>
+          ${items.every(i => !Number(i.cost||0)) && invCostFilterOn
+            ? `<span style="font-size:9px;font-weight:700;color:#c74545;background:#fff0f0;padding:2px 6px;border-radius:8px;">ยังไม่ใส่ทุน</span>`
+            : items.some(i => Number(i.cost||0) > 0)
+              ? `<span style="font-size:9px;font-weight:600;color:var(--ink-muted);background:var(--cream);padding:2px 6px;border-radius:8px;"><i class="fa-solid fa-coins" style="margin-right:2px;opacity:0.6;"></i>${CURRENCY}${Number(items.reduce((s,i)=>s+Number(i.cost||0),0)).toLocaleString()}</span>`
+              : ''
+          }
+        </div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">${sizeBadges}</div>
       </div>
     </div>`;
@@ -4419,7 +4512,13 @@ function switchSection(id) {
   document.getElementById('sec-'+id).classList.add('active');
   document.getElementById('nav-'+id).classList.add('active');
   document.getElementById('btn-new-top').style.display = id === 'dashboard' ? '' : 'none';
-  if (id === 'inventory') renderInventory();
+  if (id === 'inventory') {
+    renderInventory();
+  } else {
+    // ซ่อน cost badge เมื่อออกจากหน้าคลัง
+    const badge = document.getElementById('inv-cost-badge');
+    if (badge) badge.style.display = 'none';
+  }
   if (id === 'history')   renderHistory();
   if (id === 'queue')     onQueueChange();
   if (id === 'sales')     renderSales();

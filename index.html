@@ -2615,19 +2615,25 @@ function renderInventory() {
     fl = fl.filter(i => i.status !== 'sold');
   }
 
-  // helper: revenue ของชุด
-  const getDressRevenue = (i) => rentals
-    .filter(r => r.clothes_id === i.id && r.status === 'returned')
-    .reduce((s, r) => s + Number(r.item_price || i.price || 0), 0);
+  // pre-compute revenue map ครั้งเดียว (O(n)) แทนการวนลูปใน sort (O(n²))
+  const revenueMap = {};
+  if (invCostMode === 2) {
+    rentals.forEach(r => {
+      if (r.status !== 'returned') return;
+      const id = r.clothes_id;
+      if (!revenueMap[id]) revenueMap[id] = 0;
+      const dressCost = (inventory.find(i => i.id === id) || {}).price || 0;
+      revenueMap[id] += Number(r.item_price || dressCost || 0);
+    });
+  }
+  const getDressRevenue = (i) => revenueMap[i.id] || 0;
 
   fl.sort((a, b) => {
     if (invCostMode === 1) {
-      // เรียงชุดไม่มีต้นทุนขึ้นก่อน
       const aNoCost = !Number(a.cost || 0) ? 0 : 1;
       const bNoCost = !Number(b.cost || 0) ? 0 : 1;
       if (aNoCost !== bNoCost) return aNoCost - bNoCost;
     } else if (invCostMode === 2) {
-      // เรียงชุดคุ้มทุนแล้วขึ้นก่อน
       const isPaidOff = (i) => { const c = Number(i.cost||0); return c > 0 && getDressRevenue(i) >= c; };
       const aOk = isPaidOff(a) ? 0 : 1;
       const bOk = isPaidOff(b) ? 0 : 1;
@@ -2680,9 +2686,8 @@ function renderInventory() {
           ${(() => {
             const cost = Number(i.cost||0);
             if (cost > 0) {
-              const rev = rentals.filter(r=>r.clothes_id===i.id&&r.status==='returned').reduce((s,r)=>s+Number(r.item_price||i.price||0),0);
-              const paidOff = rev >= cost;
-              if (invCostMode === 2 && paidOff)
+              const paidOff = invCostMode === 2 && (revenueMap[i.id]||0) >= cost;
+              if (paidOff)
                 return `<span style="font-size:9px;font-weight:700;color:var(--green);background:var(--green-light);padding:2px 6px;border-radius:8px;"><i class="fa-solid fa-circle-check" style="margin-right:2px;"></i>คุ้มทุนแล้ว</span>`;
               return `<span style="font-size:9px;font-weight:600;color:var(--ink-muted);background:var(--cream);padding:2px 6px;border-radius:8px;"><i class="fa-solid fa-coins" style="margin-right:2px;opacity:0.6;"></i>${CURRENCY}${cost.toLocaleString()}</span>`;
             }

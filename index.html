@@ -538,10 +538,27 @@
       </div>
       <!-- SALES CONTENT (hidden until PIN ok) -->
       <div id="sales-content" style="display:none;">
+
+        <!-- ปุ่ม Stock — โดดเด่น อยู่บนสุด -->
+        <button onclick="openStockSummary()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:var(--ink);color:white;border:none;border-radius:14px;font-family:'Prompt',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px;box-shadow:0 3px 10px rgba(0,0,0,0.15);">
+          <i class="fa-solid fa-boxes-stacking" style="font-size:18px;"></i>
+          ดูสรุป Stock ทั้งหมด
+          <i class="fa-solid fa-chevron-right" style="font-size:12px;opacity:0.6;margin-left:auto;"></i>
+        </button>
+
         <!-- date filter -->
         <div style="background:white;border-radius:14px;padding:14px;margin-bottom:14px;border:1px solid rgba(200,114,106,0.08);box-shadow:var(--card-shadow);">
           <div style="font-size:12px;font-weight:600;color:var(--ink);margin-bottom:10px;"><i class="fa-solid fa-calendar" style="margin-right:6px;color:var(--rose);"></i>เลือกช่วงวันที่</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <!-- quick range -->
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px;">
+            <button onclick="setSalesRange('today')" class="sales-range-btn" style="text-align:center;">วันนี้</button>
+            <button onclick="setSalesRange('week')" class="sales-range-btn" style="text-align:center;">7 วัน</button>
+            <button onclick="setSalesRange('month')" class="sales-range-btn" style="text-align:center;">เดือนนี้</button>
+            <button onclick="setSalesRange('year')" class="sales-range-btn" style="text-align:center;">ปีนี้</button>
+          </div>
+          <button onclick="setSalesRange('all')" class="sales-range-btn" style="width:100%;text-align:center;margin-bottom:10px;">ทั้งหมด</button>
+          <!-- date picker -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
             <div>
               <label style="font-size:10px;color:var(--ink-muted);">วันเริ่มต้น</label>
               <input type="date" id="sales-date-from" class="form-input" onchange="renderSalesContent()">
@@ -550,13 +567,6 @@
               <label style="font-size:10px;color:var(--ink-muted);">วันสิ้นสุด</label>
               <input type="date" id="sales-date-to" class="form-input" onchange="renderSalesContent()">
             </div>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button onclick="setSalesRange('today')" class="sales-range-btn">วันนี้</button>
-            <button onclick="setSalesRange('week')" class="sales-range-btn">7 วัน</button>
-            <button onclick="setSalesRange('month')" class="sales-range-btn">เดือนนี้</button>
-            <button onclick="setSalesRange('year')" class="sales-range-btn">ปีนี้</button>
-            <button onclick="setSalesRange('all')" class="sales-range-btn">ทั้งหมด</button>
           </div>
         </div>
         <div id="sales-summary"></div>
@@ -571,6 +581,28 @@
     <button class="nav-btn" id="nav-sales" onclick="switchSection('sales')"><i class="fa-solid fa-chart-line"></i>ยอดขาย</button>
     <button class="nav-btn" id="nav-history" onclick="switchSection('history')"><i class="fa-solid fa-clock-rotate-left"></i>ประวัติ</button>
   </nav>
+</div>
+
+<!-- MODAL: STOCK SUMMARY -->
+<div id="modal-stock" class="modal-overlay" onclick="handleOverlayClick(event,'modal-stock')">
+  <div class="modal-sheet" style="max-height:90vh;overflow-y:auto;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-boxes-stacking" style="margin-right:6px;color:var(--rose);"></i>สรุป Stock ทั้งหมด</div>
+      <button class="modal-close" onclick="closeModal('modal-stock')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <!-- filter เดือน -->
+    <div style="padding:0 16px 12px;">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+        <span style="font-size:11px;font-weight:600;color:var(--ink-muted);">แสดงตาม:</span>
+        <select id="stock-month-filter" onchange="renderStockModal()" class="form-input" style="flex:1;min-width:120px;font-size:12px;padding:6px 10px;">
+          <option value="all">ทั้งหมด</option>
+        </select>
+        <button onclick="printStockSummary()" style="padding:7px 14px;background:var(--ink);color:white;border:none;border-radius:20px;font-family:'Prompt',sans-serif;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;"><i class="fa-solid fa-print" style="margin-right:4px;"></i>ปริ้น</button>
+      </div>
+      <div id="stock-modal-body"></div>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL: NEW RENTAL -->
@@ -1701,7 +1733,7 @@ function buildAccountSetPages(bookingIds) {
         <div style="font-size:11px;color:#888;margin-bottom:8px;text-align:center;">สำเนาบัตรประชาชน</div>
         <div style="text-align:center;">
           <img src="${r.id_card_url}"
-               style="max-width:55%;width:auto;max-height:80mm;object-fit:contain;border:1px solid #ccc;display:block;margin:0 auto;border-radius:4px;"
+               style="max-width:100%;width:auto;max-height:160mm;object-fit:contain;border:1px solid #ccc;display:block;margin:0 auto;border-radius:4px;"
                onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
           <div style="display:none;border:2px dashed #ccc;padding:40px;border-radius:8px;color:#aaa;font-size:13px;">โหลดรูปบัตรไม่ได้</div>
         </div>
@@ -1776,7 +1808,7 @@ function printIdCardSummary(method) {
       </div>
       <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;letter-spacing:0.05em;">สำเนาบัตรประชาชน</div>
       <div style="text-align:center;">
-        <img src="${c.url}" style="max-width:55%;width:auto;max-height:80mm;border:1px solid #999;border-radius:4px;display:block;margin:0 auto;">
+        <img src="${c.url}" style="max-width:100%;width:auto;max-height:160mm;border:1px solid #999;border-radius:4px;display:block;margin:0 auto;">
       </div>
     </div>`;
   });
@@ -2573,6 +2605,217 @@ function toggleInvCostFilter() {
   }
   updateInvCostBadge();
   renderInventory();
+}
+
+function openStockSummary() {
+  // สร้าง options เดือน จาก rentals
+  const monthSet = new Set();
+  rentals.forEach(r => {
+    const d = (r.created_at || r.start || '').slice(0, 7); // YYYY-MM
+    if (d) monthSet.add(d);
+  });
+  const months = Array.from(monthSet).sort().reverse();
+  const sel = document.getElementById('stock-month-filter');
+  sel.innerHTML = '<option value="all">ทั้งหมด</option>';
+  months.forEach(m => {
+    const [y, mo] = m.split('-');
+    const yBE = Number(y) + 543;
+    const monthNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const label = `${monthNames[Number(mo)-1]} ${yBE}`;
+    sel.innerHTML += `<option value="${m}">${label}</option>`;
+  });
+  renderStockModal();
+  openModal('modal-stock');
+}
+
+function renderStockModal() {
+  const monthFilter = document.getElementById('stock-month-filter')?.value || 'all';
+  const body = document.getElementById('stock-modal-body');
+  if (!body) return;
+
+  // หา rentals ที่อยู่ในเดือนที่เลือก
+  const filteredRentals = monthFilter === 'all' ? rentals : rentals.filter(r => {
+    const d = (r.created_at || r.start || '').slice(0, 7);
+    return d === monthFilter;
+  });
+
+  // นับรายได้ต่อชุดในช่วงเวลา
+  const revenueByDress = {};
+  const countByDress = {};
+  filteredRentals.forEach(r => {
+    if (r.status === 'cancelled') return;
+    const id = r.clothes_id;
+    if (!id) return;
+    revenueByDress[id] = (revenueByDress[id] || 0) + Number(r.item_price || 0);
+    countByDress[id] = (countByDress[id] || 0) + 1;
+  });
+
+  // เรียงชุดตามรหัส
+  const sorted = [...inventory]
+    .filter(i => i.status !== 'sold')
+    .sort((a, b) => (a.id || '').localeCompare(b.id || '', undefined, { numeric: true }));
+
+  const totalCost = sorted.reduce((s, i) => s + Number(i.cost || 0), 0);
+  const totalRevInPeriod = sorted.reduce((s, i) => s + (revenueByDress[i.id] || 0), 0);
+  const noCost = sorted.filter(i => !Number(i.cost || 0)).length;
+
+  body.innerHTML = `
+    <!-- summary bar -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+      <div style="background:var(--cream);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:18px;font-weight:700;color:var(--rose);">${sorted.length}</div>
+        <div style="font-size:9px;color:var(--ink-muted);">ชุดทั้งหมด</div>
+      </div>
+      <div style="background:var(--cream);border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:13px;font-weight:700;color:var(--ink);">฿${totalCost.toLocaleString()}</div>
+        <div style="font-size:9px;color:var(--ink-muted);">รวมต้นทุน</div>
+      </div>
+      <div style="background:${noCost>0?'#fff0f0':'var(--cream)'};border-radius:10px;padding:10px;text-align:center;">
+        <div style="font-size:18px;font-weight:700;color:${noCost>0?'#c74545':'var(--green)'};">${noCost}</div>
+        <div style="font-size:9px;color:var(--ink-muted);">ยังไม่ใส่ทุน</div>
+      </div>
+    </div>
+    <!-- ตาราง -->
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead>
+          <tr style="background:var(--rose-light);color:var(--rose-dark);">
+            <th style="padding:7px 6px;text-align:left;font-weight:700;border-radius:8px 0 0 0;">#</th>
+            <th style="padding:7px 4px;text-align:left;font-weight:700;">รหัส</th>
+            <th style="padding:7px 4px;text-align:left;font-weight:700;">ไซส์</th>
+            <th style="padding:7px 4px;text-align:left;font-weight:700;">ชื่อชุด</th>
+            <th style="padding:7px 4px;text-align:right;font-weight:700;">เช่า/วัน</th>
+            <th style="padding:7px 4px;text-align:right;font-weight:700;">ทุน</th>
+            <th style="padding:7px 6px;text-align:right;font-weight:700;border-radius:0 8px 0 0;">รายได้${monthFilter!=='all'?'<br><span style=\'font-weight:400;font-size:9px;\'>ช่วงนี้</span>':''}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sorted.map((i, idx) => {
+            const cost = Number(i.cost || 0);
+            const rev = revenueByDress[i.id] || 0;
+            const cnt = countByDress[i.id] || 0;
+            const paidOff = cost > 0 && rev >= cost;
+            const rowBg = idx % 2 === 0 ? 'white' : '#fdf8f7';
+            return `<tr style="background:${rowBg};">
+              <td style="padding:6px 6px;color:var(--ink-muted);">${idx+1}</td>
+              <td style="padding:6px 4px;font-weight:700;color:var(--rose-dark);">${i.id}</td>
+              <td style="padding:6px 4px;color:var(--ink-muted);">${i.size || '—'}</td>
+              <td style="padding:6px 4px;font-weight:600;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${i.name || '—'}</td>
+              <td style="padding:6px 4px;text-align:right;">฿${Number(i.price||0).toLocaleString()}</td>
+              <td style="padding:6px 4px;text-align:right;color:${cost>0?'var(--ink)':'#c74545'};">${cost>0?'฿'+cost.toLocaleString():'—'}</td>
+              <td style="padding:6px 6px;text-align:right;color:${paidOff?'var(--green)':'var(--ink)'};">
+                ${rev>0?'฿'+rev.toLocaleString():'—'}
+                ${cnt>0?`<div style="font-size:9px;color:var(--ink-muted);">${cnt} ครั้ง</div>`:''}
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background:var(--rose-light);font-weight:700;">
+            <td colspan="5" style="padding:8px 6px;color:var(--rose-dark);">รวม</td>
+            <td style="padding:8px 4px;text-align:right;color:var(--rose-dark);">฿${totalCost.toLocaleString()}</td>
+            <td style="padding:8px 6px;text-align:right;color:var(--rose-dark);">฿${totalRevInPeriod.toLocaleString()}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>`;
+}
+
+function printStockSummary() {
+  const monthFilter = document.getElementById('stock-month-filter')?.value || 'all';
+  const sel = document.getElementById('stock-month-filter');
+  const monthLabel = sel?.options[sel.selectedIndex]?.text || 'ทั้งหมด';
+
+  const filteredRentals = monthFilter === 'all' ? rentals : rentals.filter(r => {
+    const d = (r.created_at || r.start || '').slice(0, 7);
+    return d === monthFilter;
+  });
+
+  const revenueByDress = {};
+  const countByDress = {};
+  filteredRentals.forEach(r => {
+    if (r.status === 'cancelled') return;
+    const id = r.clothes_id; if (!id) return;
+    revenueByDress[id] = (revenueByDress[id] || 0) + Number(r.item_price || 0);
+    countByDress[id]   = (countByDress[id]   || 0) + 1;
+  });
+
+  const sorted = [...inventory]
+    .filter(i => i.status !== 'sold')
+    .sort((a, b) => (a.id || '').localeCompare(b.id || '', undefined, { numeric: true }));
+
+  const totalCost = sorted.reduce((s, i) => s + Number(i.cost || 0), 0);
+  const totalRev  = sorted.reduce((s, i) => s + (revenueByDress[i.id] || 0), 0);
+  const noCost    = sorted.filter(i => !Number(i.cost || 0)).length;
+
+  const rows = sorted.map((i, idx) => {
+    const cost = Number(i.cost || 0);
+    const rev  = revenueByDress[i.id] || 0;
+    const cnt  = countByDress[i.id]   || 0;
+    const paidOff = cost > 0 && rev >= cost;
+    return `<tr style="background:${idx%2===0?'white':'#fdf8f7'};">
+      <td style="padding:5px 6px;color:#888;">${idx+1}</td>
+      <td style="padding:5px 4px;font-weight:700;color:#c8726a;">${i.id}</td>
+      <td style="padding:5px 4px;color:#888;">${i.size||'—'}</td>
+      <td style="padding:5px 4px;font-weight:600;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${i.name||'—'}</td>
+      <td style="padding:5px 4px;text-align:right;">฿${Number(i.price||0).toLocaleString()}</td>
+      <td style="padding:5px 4px;text-align:right;color:${cost>0?'#333':'#c74545'};">${cost>0?'฿'+cost.toLocaleString():'—'}</td>
+      <td style="padding:5px 6px;text-align:right;color:${paidOff?'green':'#333'};">
+        ${rev>0?'฿'+rev.toLocaleString():'—'}${cnt>0?` <span style="font-size:8px;color:#aaa;">(${cnt})</span>`:''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Stock Summary</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    body { font-family: 'Prompt', sans-serif; font-size: 11px; color: #333; margin: 0; }
+    h2 { font-size: 16px; margin: 0 0 4px; color: #c8726a; }
+    .sub { font-size: 10px; color: #888; margin-bottom: 14px; }
+    .summary { display: flex; gap: 12px; margin-bottom: 14px; }
+    .sum-box { flex: 1; background: #fdf5f4; border-radius: 8px; padding: 10px; text-align: center; }
+    .sum-val { font-size: 16px; font-weight: 700; color: #c8726a; }
+    .sum-lbl { font-size: 9px; color: #888; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    th { background: #fdf5f4; color: #c8726a; padding: 7px 5px; font-weight: 700; text-align: left; }
+    th:nth-child(5), th:nth-child(6), th:nth-child(7) { text-align: right; }
+    tfoot td { background: #fdf5f4; font-weight: 700; color: #c8726a; padding: 7px 5px; }
+    tfoot td:nth-child(2), tfoot td:nth-child(3) { text-align: right; }
+    @media print { button { display: none; } }
+  </style></head><body>
+  <h2><i>📦</i> สรุป Stock ทั้งหมด</h2>
+  <div class="sub">แสดงตาม: ${monthLabel} &nbsp;|&nbsp; พิมพ์: ${new Date().toLocaleDateString('th-TH')}</div>
+  <div class="summary">
+    <div class="sum-box"><div class="sum-val">${sorted.length}</div><div class="sum-lbl">ชุดทั้งหมด</div></div>
+    <div class="sum-box"><div class="sum-val">฿${totalCost.toLocaleString()}</div><div class="sum-lbl">รวมต้นทุน</div></div>
+    <div class="sum-box"><div class="sum-val" style="color:${noCost>0?'#c74545':'green'};">${noCost}</div><div class="sum-lbl">ยังไม่ใส่ทุน</div></div>
+    <div class="sum-box"><div class="sum-val">฿${totalRev.toLocaleString()}</div><div class="sum-lbl">รายได้ช่วงนี้</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>#</th><th>รหัส</th><th>ไซส์</th><th>ชื่อชุด</th>
+      <th style="text-align:right;">เช่า/วัน</th>
+      <th style="text-align:right;">ต้นทุน</th>
+      <th style="text-align:right;">รายได้</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr>
+      <td colspan="5">รวม</td>
+      <td style="text-align:right;">฿${totalCost.toLocaleString()}</td>
+      <td style="text-align:right;">฿${totalRev.toLocaleString()}</td>
+    </tr></tfoot>
+  </table>
+  </body></html>`;
+
+  const w = window.open('', '_blank', 'width=800,height=700');
+  if (w) {
+    w.document.write(html);
+    w.document.close();
+    w.onload = () => w.print();
+  } else {
+    showToast('popup ถูกบล็อก กรุณาอนุญาต popup แล้วลองใหม่', 'err');
+  }
 }
 
 function updateInvCostBadge() {

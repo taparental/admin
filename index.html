@@ -656,6 +656,31 @@
         </div>
       </div>
       <div id="ebl-items" style="margin-bottom:12px;background:var(--cream);border-radius:10px;padding:10px;font-size:12px;color:var(--ink-muted);"></div>
+
+      <!-- บัตรประชาชน -->
+      <div class="form-group">
+        <label class="form-label"><i class="fa-solid fa-id-card" style="margin-right:5px;color:var(--rose);"></i>บัตรประชาชน</label>
+        <div id="ebl-id-card-preview" style="margin-bottom:6px;"></div>
+        <div style="display:flex;gap:6px;">
+          <button type="button" onclick="document.getElementById('ebl-id-card-file').click()" style="flex:1;padding:8px;background:var(--cream);border:1.5px dashed rgba(200,114,106,0.4);border-radius:10px;color:var(--rose-dark);font-family:'Prompt',sans-serif;font-size:11px;font-weight:600;cursor:pointer;"><i class="fa-solid fa-arrow-up-from-bracket" style="margin-right:4px;"></i>อัปโหลดใหม่</button>
+          <button type="button" id="ebl-id-card-clear" onclick="clearEblImage('id_card')" style="display:none;padding:8px 12px;background:#fff0f0;border:1px solid rgba(199,69,69,0.3);border-radius:10px;color:#c74545;font-family:'Prompt',sans-serif;font-size:11px;cursor:pointer;"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        <input type="file" id="ebl-id-card-file" accept="image/*" style="display:none;" onchange="uploadEblImage(event,'id_card')">
+        <input type="hidden" id="ebl-id-card-url" value="">
+      </div>
+
+      <!-- สลิป -->
+      <div class="form-group">
+        <label class="form-label"><i class="fa-solid fa-money-bill-transfer" style="margin-right:5px;color:var(--rose);"></i>สลิปโอนเงิน</label>
+        <div id="ebl-slip-preview" style="margin-bottom:6px;"></div>
+        <div style="display:flex;gap:6px;">
+          <button type="button" onclick="document.getElementById('ebl-slip-file').click()" style="flex:1;padding:8px;background:var(--cream);border:1.5px dashed rgba(200,114,106,0.4);border-radius:10px;color:var(--rose-dark);font-family:'Prompt',sans-serif;font-size:11px;font-weight:600;cursor:pointer;"><i class="fa-solid fa-arrow-up-from-bracket" style="margin-right:4px;"></i>อัปโหลดใหม่</button>
+          <button type="button" id="ebl-slip-clear" onclick="clearEblImage('slip')" style="display:none;padding:8px 12px;background:#fff0f0;border:1px solid rgba(199,69,69,0.3);border-radius:10px;color:#c74545;font-family:'Prompt',sans-serif;font-size:11px;cursor:pointer;"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        <input type="file" id="ebl-slip-file" accept="image/*" style="display:none;" onchange="uploadEblImage(event,'slip')">
+        <input type="hidden" id="ebl-slip-url" value="">
+      </div>
+
       <button type="submit" class="btn-submit"><i class="fa-solid fa-check" style="margin-right:6px;"></i>บันทึก</button>
       <button type="button" onclick="deleteBillingToTrash()" style="width:100%;margin-top:8px;padding:12px;background:#fff0f0;color:#c74545;border:1.5px solid rgba(199,69,69,0.3);border-radius:10px;font-family:'Prompt',sans-serif;font-size:13px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-trash" style="margin-right:6px;"></i>ลบรายการนี้</button>
     </form>
@@ -1226,6 +1251,14 @@ let queueCalMonth = new Date();
 
 /* ── BOOT ── */
 window.onload = () => {
+  // ── ?reset=1 → เคลียร์ session แล้ว redirect ──
+  if (location.search.includes('reset=1')) {
+    sessionStorage.clear();
+    localStorage.removeItem('tapa_trash');
+    location.href = location.pathname;
+    return;
+  }
+
   // ฝังโลโก้ในหน้า PIN และหน้าลูกค้า
   try {
     document.getElementById('pin-logo').src = STAMP_IMG;
@@ -1368,8 +1401,14 @@ async function refreshData() {
     showToast('ซิงค์ข้อมูลสำเร็จ', 'ok');
   } catch(e) {
     setConn('error', 'error');
-    showToast('ดึงข้อมูลไม่ได้: ' + e.message, 'err');
-    console.error(e);
+    console.error('refreshData error:', e);
+    // ถ้าโหลด data ไม่ได้ → clear session แล้วขอ PIN ใหม่
+    sessionStorage.removeItem('tapa_admin_ok');
+    showToast('เชื่อมต่อไม่ได้: ' + e.message + ' — กรุณาเข้าสู่ระบบใหม่', 'err');
+    setTimeout(() => {
+      document.getElementById('app').style.display = 'none';
+      showPinGate();
+    }, 2000);
   } finally {
     setLoading(false);
     document.getElementById('refresh-btn').classList.remove('spinning');
@@ -2774,7 +2813,7 @@ async function deleteBillingToTrash() {
 
     // ลบจาก Supabase (set status = cancelled)
     for (const r of items) {
-      await sb.from('rentals').update({ status: 'cancelled' }).eq('rental_id', r.rental_id || r.id);
+      await sbPatch('rentals', { rental_id: r.rental_id || r.id }, { status: 'cancelled' });
     }
     await loadData();
     closeModal('modal-edit-billing');
@@ -2826,7 +2865,11 @@ function renderTrashList() {
 async function restoreTrashItem(bookingId) {
   setLoading(true);
   try {
-    await sb.from('rentals').update({ status: 'active' }).eq('booking_id', bookingId);
+    // restore ทุก rental ใน booking นี้
+    const toRestore = rentals.filter(r => (r.booking_id || r.rental_id) === bookingId);
+    for (const r of toRestore) {
+      await sbPatch('rentals', { rental_id: r.rental_id || r.id }, { status: 'returned' });
+    }
     // เอาออกจาก trash
     const trash = getTrashItems().filter(t => t.bookingId !== bookingId);
     saveTrashItems(trash);
@@ -2844,7 +2887,15 @@ async function permanentDeleteTrashItem(bookingId) {
   if (!confirm('ลบถาวร? ไม่สามารถกู้คืนได้')) return;
   setLoading(true);
   try {
-    await sb.from('rentals').delete().eq('booking_id', bookingId);
+    const toDelete = rentals.filter(r => (r.booking_id || r.rental_id) === bookingId);
+    for (const r of toDelete) {
+      const rid = encodeURIComponent(r.rental_id || r.id);
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/rentals?rental_id=eq.${rid}`, {
+        method: 'DELETE',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=representation' }
+      });
+      if (!res.ok) throw new Error('ลบไม่สำเร็จ');
+    }
     const trash = getTrashItems().filter(t => t.bookingId !== bookingId);
     saveTrashItems(trash);
     await loadData();
@@ -2940,7 +2991,52 @@ function openEditBilling(bookingId) {
   document.getElementById('ebl-items').innerHTML =
     `<div style="font-size:10px;font-weight:600;color:var(--ink-muted);margin-bottom:4px;">รายการชุดในบิล (${items.length} ชุด)</div>${itemsHtml}`;
 
+  // โหลดรูปบัตร/สลิป
+  const idUrl  = first.id_card_url || '';
+  const slipUrl = first.slip_url   || '';
+  document.getElementById('ebl-id-card-url').value = idUrl;
+  document.getElementById('ebl-slip-url').value    = slipUrl;
+  // preview
+  const idPrev   = document.getElementById('ebl-id-card-preview');
+  const slipPrev = document.getElementById('ebl-slip-preview');
+  const idClear  = document.getElementById('ebl-id-card-clear');
+  const slipClear = document.getElementById('ebl-slip-clear');
+  if (idPrev)   idPrev.innerHTML   = idUrl   ? `<img src="${idUrl}"   onclick="window.open('${idUrl}','_blank')" style="max-width:100%;max-height:140px;border-radius:8px;object-fit:contain;cursor:pointer;">` : '';
+  if (slipPrev) slipPrev.innerHTML = slipUrl ? `<img src="${slipUrl}" onclick="window.open('${slipUrl}','_blank')" style="max-width:100%;max-height:140px;border-radius:8px;object-fit:contain;cursor:pointer;">` : '';
+  if (idClear)   idClear.style.display   = idUrl   ? 'block' : 'none';
+  if (slipClear) slipClear.style.display = slipUrl ? 'block' : 'none';
+
   openModal('modal-edit-billing');
+}
+
+async function uploadEblImage(event, kind) {
+  const file = event.target.files[0];
+  if (!file) return;
+  setLoading(true);
+  try {
+    const url = await uploadImageSmart(file, kind === 'slip' ? 'slip_ebl' : 'id_ebl', 'supabase');
+    const field   = kind === 'id_card' ? 'ebl-id-card-url'   : 'ebl-slip-url';
+    const preview = kind === 'id_card' ? 'ebl-id-card-preview' : 'ebl-slip-preview';
+    const clearBtn = kind === 'id_card' ? 'ebl-id-card-clear'  : 'ebl-slip-clear';
+    document.getElementById(field).value = url;
+    const prev = document.getElementById(preview);
+    if (prev) prev.innerHTML = `<img src="${url}" onclick="window.open('${url}','_blank')" style="max-width:100%;max-height:140px;border-radius:8px;object-fit:contain;cursor:pointer;">`;
+    const clr = document.getElementById(clearBtn);
+    if (clr) clr.style.display = 'block';
+    showToast('อัปโหลดสำเร็จ', 'ok');
+  } catch(err) { showToast('อัปโหลดไม่สำเร็จ: ' + err.message, 'err'); }
+  finally { setLoading(false); }
+}
+
+function clearEblImage(kind) {
+  const field   = kind === 'id_card' ? 'ebl-id-card-url'   : 'ebl-slip-url';
+  const preview = kind === 'id_card' ? 'ebl-id-card-preview' : 'ebl-slip-preview';
+  const clearBtn = kind === 'id_card' ? 'ebl-id-card-clear'  : 'ebl-slip-clear';
+  document.getElementById(field).value = '';
+  const prev = document.getElementById(preview);
+  if (prev) prev.innerHTML = '';
+  const clr = document.getElementById(clearBtn);
+  if (clr) clr.style.display = 'none';
 }
 
 async function submitEditBilling(e) {
@@ -2956,26 +3052,28 @@ async function submitEditBilling(e) {
   const items = rentals.filter(r => (r.booking_id || r.rental_id) === bookingId);
   if (!items.length) return;
 
+  // รูปบัตร/สลิปที่อาจเปลี่ยนใหม่
+  const newIdCard = document.getElementById('ebl-id-card-url')?.value.trim() || '';
+  const newSlip   = document.getElementById('ebl-slip-url')?.value.trim() || '';
+
   setLoading(true);
   try {
-    // อัปเดตทุก rental ใน booking นี้
-    const updates = {
-      order_no:       newOrderNo || null,
-      customer:       newCustomer,
-      payment_method: newPayment,
-      payment_status: newStatus,
-    };
-    // แบ่งค่า deposit เฉลี่ยถ้ามีหลายชุด (หรือใส่ทั้งหมดที่ชุดแรก)
-    const perItem = items.length > 1 ? Math.round(newDeposit / items.length) : newDeposit;
-    const finePerItem = items.length > 1 ? Math.round(newFine / items.length) : newFine;
+    const perItem     = items.length > 1 ? Math.round(newDeposit / items.length) : newDeposit;
+    const finePerItem = items.length > 1 ? Math.round(newFine    / items.length) : newFine;
 
     for (const r of items) {
       const rid = r.rental_id || r.id;
-      await sb.from('rentals').update({
-        ...updates,
-        deposit: perItem,
-        fine: finePerItem,
-      }).eq('rental_id', rid);
+      const patch = {
+        order_no:       newOrderNo || null,
+        customer:       newCustomer,
+        payment_method: newPayment,
+        payment_status: newStatus,
+        deposit:        perItem,
+        fine:           finePerItem,
+      };
+      if (newIdCard) patch.id_card_url = newIdCard;
+      if (newSlip)   patch.slip_url    = newSlip;
+      await sbPatch('rentals', { rental_id: rid }, patch);
     }
     await loadData();
     closeModal('modal-edit-billing');

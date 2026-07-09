@@ -604,7 +604,10 @@
     <div class="modal-handle"></div>
     <div class="modal-header" style="flex-shrink:0;">
       <div class="modal-title"><i class="fa-solid fa-pen-to-square" style="margin-right:6px;color:var(--rose);"></i>แก้ไขรายการบิล</div>
-      <button class="modal-close" onclick="closeModal('modal-billing-list')"><i class="fa-solid fa-xmark"></i></button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="openAddBilling()" style="padding:6px 12px;background:var(--rose);color:white;border:none;border-radius:20px;font-family:'Prompt',sans-serif;font-size:12px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-plus" style="margin-right:4px;"></i>เพิ่มบิล</button>
+        <button class="modal-close" onclick="closeModal('modal-billing-list')"><i class="fa-solid fa-xmark"></i></button>
+      </div>
     </div>
     <!-- search -->
     <div style="padding:8px 16px;flex-shrink:0;">
@@ -612,6 +615,105 @@
     </div>
     <!-- list -->
     <div id="billing-list-body" style="overflow-y:auto;flex:1;padding:0 12px 16px;"></div>
+  </div>
+</div>
+
+<!-- MODAL: ADD BILLING -->
+<div id="modal-add-billing" class="modal-overlay" onclick="handleOverlayClick(event,'modal-add-billing')">
+  <div class="modal-sheet" style="max-height:92vh;overflow-y:auto;">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-plus" style="margin-right:6px;color:var(--rose);"></i>เพิ่มบิลใหม่</div>
+      <button class="modal-close" onclick="closeModal('modal-add-billing')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <form onsubmit="submitAddBilling(event)" style="padding:0 16px 24px;">
+      <div class="form-group">
+        <label class="form-label">เลขบิล (order_no)</label>
+        <input type="text" id="abl-order-no" class="form-input" placeholder="เช่น RE2569070001">
+      </div>
+      <div class="form-group">
+        <label class="form-label">ชื่อลูกค้า <span style="color:#c74545;">*</span></label>
+        <input type="text" id="abl-customer" class="form-input" placeholder="ชื่อลูกค้า" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">เบอร์โทร</label>
+        <input type="tel" id="abl-phone" class="form-input" placeholder="0812345678">
+      </div>
+      <div class="form-group">
+        <label class="form-label">รหัสชุด <span style="color:#c74545;">*</span></label>
+        <input type="text" id="abl-clothes-id" class="form-input" placeholder="เช่น D1091" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">ราคาเช่า (item_price)</label>
+        <input type="number" id="abl-item-price" class="form-input" min="0" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">มัดจำ / ราคารวม (deposit)</label>
+        <input type="number" id="abl-deposit" class="form-input" min="0" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">ค่าปรับ (fine)</label>
+        <input type="number" id="abl-fine" class="form-input" min="0" value="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">วันรับชุด</label>
+        <input type="date" id="abl-start" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">วันคืนชุด</label>
+        <input type="date" id="abl-end" class="form-input">
+      </div>
+      <div class="form-group">
+        <label class="form-label">วิธีชำระ</label>
+        <div class="cond-group" id="abl-payment-picker">
+          <div class="cond-option selected" data-val="transfer"><i class="fa-solid fa-building-columns" style="margin-right:4px;"></i>เงินโอน</div>
+          <div class="cond-option" data-val="cash"><i class="fa-solid fa-money-bill-wave" style="margin-right:4px;"></i>เงินสด</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">สถานะการชำระ</label>
+        <div class="cond-group" id="abl-status-picker">
+          <div class="cond-option selected" data-val="paid">ชำระแล้ว</div>
+          <div class="cond-option" data-val="unpaid">ยังไม่ชำระ</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">สถานะคิว</label>
+        <div class="cond-group" id="abl-rental-status-picker">
+          <div class="cond-option selected" data-val="returned">คืนแล้ว</div>
+          <div class="cond-option" data-val="active">กำลังเช่า</div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">การจัดส่ง</label>
+        <div class="cond-group" id="abl-delivery-picker">
+          <div class="cond-option selected" data-val="pickup">รับเอง</div>
+          <div class="cond-option" data-val="delivery">ส่งพัสดุ</div>
+          <div class="cond-option" data-val="messenger">ส่งแมส</div>
+        </div>
+      </div>
+      <!-- บัตรประชาชน -->
+      <div class="form-group">
+        <label class="form-label"><i class="fa-solid fa-id-card" style="margin-right:5px;color:var(--rose);"></i>บัตรประชาชน</label>
+        <div id="abl-id-card-preview" style="margin-bottom:6px;"></div>
+        <button type="button" onclick="document.getElementById('abl-id-card-file').click()" style="width:100%;padding:8px;background:var(--cream);border:1.5px dashed rgba(200,114,106,0.4);border-radius:10px;color:var(--rose-dark);font-family:'Prompt',sans-serif;font-size:11px;font-weight:600;cursor:pointer;"><i class="fa-solid fa-arrow-up-from-bracket" style="margin-right:4px;"></i>อัปโหลดบัตรประชาชน</button>
+        <input type="file" id="abl-id-card-file" accept="image/*" style="display:none;" onchange="uploadAblImage(event,'id_card')">
+        <input type="hidden" id="abl-id-card-url" value="">
+      </div>
+      <!-- สลิป -->
+      <div class="form-group">
+        <label class="form-label"><i class="fa-solid fa-money-bill-transfer" style="margin-right:5px;color:var(--rose);"></i>สลิปโอนเงิน</label>
+        <div id="abl-slip-preview" style="margin-bottom:6px;"></div>
+        <button type="button" onclick="document.getElementById('abl-slip-file').click()" style="width:100%;padding:8px;background:var(--cream);border:1.5px dashed rgba(200,114,106,0.4);border-radius:10px;color:var(--rose-dark);font-family:'Prompt',sans-serif;font-size:11px;font-weight:600;cursor:pointer;"><i class="fa-solid fa-arrow-up-from-bracket" style="margin-right:4px;"></i>อัปโหลดสลิป</button>
+        <input type="file" id="abl-slip-file" accept="image/*" style="display:none;" onchange="uploadAblImage(event,'slip')">
+        <input type="hidden" id="abl-slip-url" value="">
+      </div>
+      <div class="form-group">
+        <label class="form-label">หมายเหตุ</label>
+        <input type="text" id="abl-note" class="form-input" placeholder="หมายเหตุ (ถ้ามี)">
+      </div>
+      <button type="submit" class="btn-submit"><i class="fa-solid fa-plus" style="margin-right:6px;"></i>เพิ่มบิล</button>
+    </form>
   </div>
 </div>
 
@@ -2815,7 +2917,7 @@ async function deleteBillingToTrash() {
     for (const r of items) {
       await sbPatch('rentals', { rental_id: r.rental_id || r.id }, { status: 'cancelled' });
     }
-    await loadData();
+    await refreshData();
     closeModal('modal-edit-billing');
     showToast('ลบไปถังขยะแล้ว — กด TAPA 3 ครั้งเพื่อดู', 'ok');
     renderSalesContent();
@@ -2873,7 +2975,7 @@ async function restoreTrashItem(bookingId) {
     // เอาออกจาก trash
     const trash = getTrashItems().filter(t => t.bookingId !== bookingId);
     saveTrashItems(trash);
-    await loadData();
+    await refreshData();
     renderTrashList();
     showToast('กู้คืนสำเร็จ', 'ok');
   } catch(err) {
@@ -2898,7 +3000,7 @@ async function permanentDeleteTrashItem(bookingId) {
     }
     const trash = getTrashItems().filter(t => t.bookingId !== bookingId);
     saveTrashItems(trash);
-    await loadData();
+    await refreshData();
     renderTrashList();
     showToast('ลบถาวรแล้ว', 'ok');
   } catch(err) {
@@ -2946,6 +3048,116 @@ function renderBillingListBody(list) {
       <i class="fa-solid fa-chevron-right" style="color:var(--ink-muted);font-size:10px;flex-shrink:0;"></i>
     </div>`;
   }).join('');
+}
+
+function openAddBilling() {
+  // reset form
+  ['abl-order-no','abl-customer','abl-phone','abl-clothes-id',
+   'abl-note','abl-id-card-url','abl-slip-url'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['abl-item-price','abl-deposit'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '0';
+  });
+  document.getElementById('abl-fine').value = '0';
+  document.getElementById('abl-start').value = getToday();
+  document.getElementById('abl-end').value   = getToday();
+  document.getElementById('abl-id-card-preview').innerHTML = '';
+  document.getElementById('abl-slip-preview').innerHTML    = '';
+
+  // reset pickers
+  [['#abl-payment-picker','transfer'],['#abl-status-picker','paid'],
+   ['#abl-rental-status-picker','returned'],['#abl-delivery-picker','pickup']].forEach(([sel, def]) => {
+    document.querySelectorAll(sel + ' .cond-option').forEach(o => {
+      o.classList.toggle('selected', o.dataset.val === def);
+      o.onclick = () => {
+        document.querySelectorAll(sel + ' .cond-option').forEach(x => x.classList.remove('selected'));
+        o.classList.add('selected');
+      };
+    });
+  });
+
+  closeModal('modal-billing-list');
+  setTimeout(() => openModal('modal-add-billing'), 200);
+}
+
+async function submitAddBilling(e) {
+  e.preventDefault();
+  const customer   = document.getElementById('abl-customer').value.trim();
+  const clothesId  = document.getElementById('abl-clothes-id').value.trim();
+  if (!customer || !clothesId) { showToast('กรุณากรอกชื่อลูกค้าและรหัสชุด', 'err'); return; }
+
+  const orderNo    = document.getElementById('abl-order-no').value.trim()  || null;
+  const phone      = document.getElementById('abl-phone').value.trim()      || null;
+  const itemPrice  = Number(document.getElementById('abl-item-price').value || 0);
+  const deposit    = Number(document.getElementById('abl-deposit').value    || 0);
+  const fine       = Number(document.getElementById('abl-fine').value       || 0);
+  const start      = document.getElementById('abl-start').value             || getToday();
+  const end        = document.getElementById('abl-end').value               || getToday();
+  const note       = document.getElementById('abl-note').value.trim()       || null;
+  const idCardUrl  = document.getElementById('abl-id-card-url').value.trim()|| null;
+  const slipUrl    = document.getElementById('abl-slip-url').value.trim()   || null;
+  const payment    = document.querySelector('#abl-payment-picker .cond-option.selected')?.dataset.val        || 'transfer';
+  const payStatus  = document.querySelector('#abl-status-picker .cond-option.selected')?.dataset.val         || 'paid';
+  const status     = document.querySelector('#abl-rental-status-picker .cond-option.selected')?.dataset.val  || 'returned';
+  const delivery   = document.querySelector('#abl-delivery-picker .cond-option.selected')?.dataset.val       || 'pickup';
+
+  // สร้าง booking_id ใหม่
+  const ts = Date.now();
+  const bookingId = `B-${ts}`;
+  const rentalId  = `R-${ts}-${Math.random().toString(36).slice(2,6)}`;
+
+  const body = {
+    rental_id:      rentalId,
+    booking_id:     bookingId,
+    clothes_id:     clothesId,
+    customer,
+    phone,
+    start,
+    end,
+    deposit,
+    fine,
+    item_price:     itemPrice,
+    note,
+    order_no:       orderNo,
+    payment_method: payment,
+    payment_status: payStatus,
+    status,
+    delivery,
+    id_card_url:    idCardUrl,
+    slip_url:       slipUrl,
+    discount:       0,
+    created_at:     new Date().toISOString(),
+  };
+
+  setLoading(true);
+  try {
+    await sbPost('rentals', body);
+    await refreshData();
+    closeModal('modal-add-billing');
+    showToast('เพิ่มบิลสำเร็จ', 'ok');
+    renderSalesContent();
+  } catch(err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'err');
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function uploadAblImage(event, kind) {
+  const file = event.target.files[0];
+  if (!file) return;
+  setLoading(true);
+  try {
+    const url = await uploadImageSmart(file, kind === 'slip' ? 'slip_abl' : 'id_abl', 'supabase');
+    document.getElementById(kind === 'id_card' ? 'abl-id-card-url' : 'abl-slip-url').value = url;
+    const prev = document.getElementById(kind === 'id_card' ? 'abl-id-card-preview' : 'abl-slip-preview');
+    if (prev) prev.innerHTML = `<img src="${url}" onclick="window.open('${url}','_blank')" style="max-width:100%;max-height:120px;border-radius:8px;object-fit:contain;cursor:pointer;margin-bottom:4px;">`;
+    showToast('อัปโหลดสำเร็จ', 'ok');
+  } catch(err) { showToast('อัปโหลดไม่สำเร็จ: ' + err.message, 'err'); }
+  finally { setLoading(false); }
 }
 
 function openEditBillingFromList(bookingId) {
@@ -3075,7 +3287,7 @@ async function submitEditBilling(e) {
       if (newSlip)   patch.slip_url    = newSlip;
       await sbPatch('rentals', { rental_id: rid }, patch);
     }
-    await loadData();
+    await refreshData();
     closeModal('modal-edit-billing');
     showToast('บันทึกการแก้ไขสำเร็จ', 'ok');
     renderSalesContent();

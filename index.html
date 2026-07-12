@@ -632,7 +632,10 @@
         <input type="text" id="abl-order-no" class="form-input" placeholder="เช่น RE2569070001">
       </div>
       <div class="form-group">
-        <label class="form-label">ชื่อลูกค้า <span style="color:#c74545;">*</span></label>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <label class="form-label" style="margin:0;">ชื่อลูกค้า <span style="color:#c74545;">*</span></label>
+          <button type="button" onclick="ablRandomCustomer()" style="padding:4px 10px;background:var(--cream);border:1px solid rgba(200,114,106,0.3);border-radius:20px;font-family:'Prompt',sans-serif;font-size:10px;font-weight:600;color:var(--rose-dark);cursor:pointer;"><i class="fa-solid fa-shuffle" style="margin-right:3px;"></i>สุ่มลูกค้า</button>
+        </div>
         <input type="text" id="abl-customer" class="form-input" placeholder="ชื่อลูกค้า" required>
       </div>
       <div class="form-group">
@@ -640,8 +643,12 @@
         <input type="tel" id="abl-phone" class="form-input" placeholder="0812345678">
       </div>
       <div class="form-group">
-        <label class="form-label">รหัสชุด <span style="color:#c74545;">*</span></label>
-        <input type="text" id="abl-clothes-id" class="form-input" placeholder="เช่น D1091" required>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <label class="form-label" style="margin:0;">รหัสชุด <span style="color:#c74545;">*</span></label>
+          <button type="button" onclick="ablRandomDress()" style="padding:4px 10px;background:var(--cream);border:1px solid rgba(200,114,106,0.3);border-radius:20px;font-family:'Prompt',sans-serif;font-size:10px;font-weight:600;color:var(--rose-dark);cursor:pointer;"><i class="fa-solid fa-shuffle" style="margin-right:3px;"></i>สุ่มชุด</button>
+        </div>
+        <input type="text" id="abl-clothes-id" class="form-input" placeholder="เช่น D1091">
+        <div id="abl-dress-preview" style="margin-top:4px;font-size:11px;color:var(--ink-muted);"></div>
       </div>
       <div class="form-group">
         <label class="form-label">ราคาเช่า (item_price)</label>
@@ -654,6 +661,10 @@
       <div class="form-group">
         <label class="form-label">ค่าปรับ (fine)</label>
         <input type="number" id="abl-fine" class="form-input" min="0" value="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">วันที่ใบเสร็จ (created_at)</label>
+        <input type="date" id="abl-created-date" class="form-input">
       </div>
       <div class="form-group">
         <label class="form-label">วันรับชุด</label>
@@ -730,6 +741,10 @@
       <div class="form-group">
         <label class="form-label">เลขบิล (order_no)</label>
         <input type="text" id="ebl-order-no" class="form-input" placeholder="เช่น RE2569060001">
+      </div>
+      <div class="form-group">
+        <label class="form-label">วันที่ใบเสร็จ</label>
+        <input type="date" id="ebl-created-date" class="form-input">
       </div>
       <div class="form-group">
         <label class="form-label">ชื่อลูกค้า</label>
@@ -3062,6 +3077,7 @@ function openAddBilling() {
     if (el) el.value = '0';
   });
   document.getElementById('abl-fine').value = '0';
+  document.getElementById('abl-created-date').value = getToday();
   document.getElementById('abl-start').value = getToday();
   document.getElementById('abl-end').value   = getToday();
   document.getElementById('abl-id-card-preview').innerHTML = '';
@@ -3081,6 +3097,62 @@ function openAddBilling() {
 
   closeModal('modal-billing-list');
   setTimeout(() => openModal('modal-add-billing'), 200);
+}
+
+function ablRandomCustomer() {
+  // สุ่มจากตาราง customers ที่โหลดมาแล้ว
+  const pool = typeof customers !== 'undefined' && customers.length > 0
+    ? customers
+    : null;
+
+  if (pool && pool.length > 0) {
+    // เฉพาะลูกค้าที่มีบัตรประชาชนในระบบ
+    const poolWithCard = pool.filter(c => c.id_card_url && c.id_card_url.startsWith('http'));
+    const pickFrom = poolWithCard.length > 0 ? poolWithCard : pool;
+    const picked = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+    document.getElementById('abl-customer').value = picked.name || '';
+    document.getElementById('abl-phone').value    = picked.phone || '';
+
+    // โหลดบัตรประชาชนถ้ามี
+    const idUrl = picked.id_card_url || '';
+    document.getElementById('abl-id-card-url').value = idUrl;
+    const prev = document.getElementById('abl-id-card-preview');
+    if (prev) prev.innerHTML = idUrl
+      ? `<img src="${idUrl}" style="max-width:100%;max-height:120px;border-radius:8px;object-fit:contain;cursor:pointer;" onclick="window.open('${idUrl}','_blank')">`
+      : '';
+    showToast(`สุ่มลูกค้า: ${picked.name || '—'}`, 'ok');
+  } else {
+    // fallback สุ่มจาก rentals ถ้าไม่มี customers table
+    const pool2 = rentals.filter(r => r.customer && r.customer !== 'รอลูกค้ากรอก' && r.phone && r.id_card_url && r.id_card_url.startsWith('http'));
+    if (!pool2.length) { showToast('ไม่มีข้อมูลลูกค้า', 'err'); return; }
+    const picked = pool2[Math.floor(Math.random() * pool2.length)];
+    document.getElementById('abl-customer').value = picked.customer || '';
+    document.getElementById('abl-phone').value    = picked.phone    || '';
+    const idUrl = picked.id_card_url || '';
+    document.getElementById('abl-id-card-url').value = idUrl;
+    const prev = document.getElementById('abl-id-card-preview');
+    if (prev) prev.innerHTML = idUrl
+      ? `<img src="${idUrl}" style="max-width:100%;max-height:120px;border-radius:8px;object-fit:contain;cursor:pointer;" onclick="window.open('${idUrl}','_blank')">`
+      : '';
+    showToast(`สุ่มลูกค้า: ${picked.customer || '—'}`, 'ok');
+  }
+}
+
+function ablRandomDress() {
+  // สุ่มชุดที่ status = 'available' จาก inventory
+  const pool = inventory.filter(i => i.status === 'available' || i.status === 'rented');
+  if (!pool.length) { showToast('ไม่มีชุดในคลัง', 'err'); return; }
+  const picked = pool[Math.floor(Math.random() * pool.length)];
+  document.getElementById('abl-clothes-id').value = picked.id || '';
+  // ใส่ราคาให้ด้วย
+  if (picked.price) {
+    document.getElementById('abl-item-price').value = picked.price;
+    document.getElementById('abl-deposit').value    = picked.price;
+  }
+  // preview ชื่อชุด
+  const prev = document.getElementById('abl-dress-preview');
+  if (prev) prev.innerHTML = `<span style="color:var(--rose-dark);font-weight:600;">${picked.id}</span> ${picked.name || ''} ${picked.size ? `(${picked.size})` : ''} — ฿${Number(picked.price||0).toLocaleString()}`;
+  showToast(`สุ่มชุด: ${picked.id} ${picked.name || ''}`, 'ok');
 }
 
 async function submitAddBilling(e) {
@@ -3109,6 +3181,10 @@ async function submitAddBilling(e) {
   const bookingId = `B-${ts}`;
   const rentalId  = `R-${ts}-${Math.random().toString(36).slice(2,6)}`;
 
+  const createdDate = document.getElementById('abl-created-date').value || getToday();
+  // แปลงวันที่เป็น ISO datetime (ใช้เวลา 12:00 น. ไทย = 05:00 UTC)
+  const createdAt = new Date(createdDate + 'T05:00:00.000Z').toISOString();
+
   const body = {
     rental_id:      rentalId,
     booking_id:     bookingId,
@@ -3129,7 +3205,7 @@ async function submitAddBilling(e) {
     id_card_url:    idCardUrl,
     slip_url:       slipUrl,
     discount:       0,
-    created_at:     new Date().toISOString(),
+    created_at:     createdAt,
   };
 
   setLoading(true);
@@ -3203,6 +3279,13 @@ function openEditBilling(bookingId) {
   document.getElementById('ebl-items').innerHTML =
     `<div style="font-size:10px;font-weight:600;color:var(--ink-muted);margin-bottom:4px;">รายการชุดในบิล (${items.length} ชุด)</div>${itemsHtml}`;
 
+  // โหลดวันที่ใบเสร็จ
+  const _rawCa = first.created_at || first.start || '';
+  const _localCa = _rawCa.length > 10
+    ? new Date(_rawCa).toLocaleDateString('en-CA')
+    : _rawCa.slice(0,10);
+  document.getElementById('ebl-created-date').value = _localCa || getToday();
+
   // โหลดรูปบัตร/สลิป
   const idUrl  = first.id_card_url || '';
   const slipUrl = first.slip_url   || '';
@@ -3275,6 +3358,10 @@ async function submitEditBilling(e) {
 
     for (const r of items) {
       const rid = r.rental_id || r.id;
+      const newCreatedDate = document.getElementById('ebl-created-date').value;
+      const newCreatedAt = newCreatedDate
+        ? new Date(newCreatedDate + 'T05:00:00.000Z').toISOString()
+        : null;
       const patch = {
         order_no:       newOrderNo || null,
         customer:       newCustomer,
@@ -3282,6 +3369,7 @@ async function submitEditBilling(e) {
         payment_status: newStatus,
         deposit:        perItem,
         fine:           finePerItem,
+        ...(newCreatedAt ? { created_at: newCreatedAt } : {}),
       };
       if (newIdCard) patch.id_card_url = newIdCard;
       if (newSlip)   patch.slip_url    = newSlip;

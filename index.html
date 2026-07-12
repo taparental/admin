@@ -6027,9 +6027,7 @@ async function submitCustomerInfo() {
     try {
       const cur = (_cpRows && _cpRows[0]) || {};
       if (cur.payment_status !== 'paid') {
-        // ใช้ payment_method จริงของคิว ไม่ hard-code เป็น transfer
-        const cpPayMethod = cur.payment_method || 'transfer';
-        assignedNo = await assignOrderNo(cpPayMethod);
+        assignedNo = await assignOrderNo('transfer');
       }
     } catch (e) { assignedNo = null; }
 

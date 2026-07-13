@@ -751,6 +751,11 @@
         <input type="text" id="ebl-customer" class="form-input">
       </div>
       <div class="form-group">
+        <label class="form-label">ราคาต่อชุด (item_price)</label>
+        <input type="number" id="ebl-item-price" class="form-input" min="0" placeholder="0">
+        <div style="font-size:10px;color:var(--ink-muted);margin-top:3px;">ราคาของชุดแต่ละชิ้น (ถ้ามีหลายชุดจะใส่ให้ทุกชิ้น)</div>
+      </div>
+      <div class="form-group">
         <label class="form-label">ราคารวม (deposit)</label>
         <input type="number" id="ebl-deposit" class="form-input" min="0">
       </div>
@@ -2262,6 +2267,20 @@ function renderSalesContent() {
       <div style="font-size:13px;font-weight:600;margin-bottom:10px;"><i class="fa-solid fa-user" style="margin-right:6px;color:var(--rose);"></i>ยอดแยกตามแอดมิน</div>
       ${adminRows}
     </div>` : ''}
+    <!-- Export Excel -->
+    <button onclick="exportRentalsExcel()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#1d6f42;color:white;border:none;border-radius:14px;font-family:'Prompt',sans-serif;cursor:pointer;margin-top:14px;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:38px;height:38px;background:rgba(255,255,255,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+          <i class="fa-solid fa-file-excel" style="font-size:18px;"></i>
+        </div>
+        <div style="text-align:left;">
+          <div style="font-size:13px;font-weight:700;">Export Excel</div>
+          <div style="font-size:10px;opacity:0.8;margin-top:1px;">ดาวน์โหลดรายการลูกค้าทั้งหมด</div>
+        </div>
+      </div>
+      <i class="fa-solid fa-download" style="font-size:14px;opacity:0.8;"></i>
+    </button>
+
     <!-- ปุ่มเมนูรายการบิล -->
     <button onclick="openBillingList()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:white;border:1px solid rgba(200,114,106,0.15);border-radius:14px;box-shadow:var(--card-shadow);font-family:'Prompt',sans-serif;cursor:pointer;margin-top:14px;margin-bottom:14px;">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -3025,6 +3044,90 @@ async function permanentDeleteTrashItem(bookingId) {
   }
 }
 
+function exportRentalsExcel() {
+  // โหลด SheetJS ถ้ายังไม่มี
+  if (typeof XLSX === 'undefined') {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => _doExportExcel();
+    document.head.appendChild(s);
+  } else {
+    _doExportExcel();
+  }
+}
+
+function _doExportExcel() {
+  // จัดกลุ่มตาม booking_id
+  const bookingMap = {};
+  rentals.forEach(r => {
+    const bid = r.booking_id || r.rental_id;
+    if (!bookingMap[bid]) bookingMap[bid] = [];
+    bookingMap[bid].push(r);
+  });
+
+  // สร้างแถวข้อมูล เรียงตาม created_at
+  const rows = Object.values(bookingMap)
+    .filter(items => items[0].status !== 'cancelled')
+    .sort((a, b) => {
+      const da = new Date(a[0].created_at || a[0].start || 0);
+      const db = new Date(b[0].created_at || b[0].start || 0);
+      return da - db;
+    })
+    .map((items, idx) => {
+      const first = items[0];
+      const rawDate = first.created_at || first.start || '';
+      const localDate = rawDate.length > 10
+        ? new Date(rawDate).toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'numeric' })
+        : rawDate;
+      const total = items.reduce((s,r) => s + Number(r.deposit||0) + Number(r.fine||0), 0);
+      const clothesList = items.map(r => r.clothes_id).join(', ');
+      const desc = `เช่าชุด ${clothesList}`;
+      return {
+        'ลำดับที่':           idx + 1,
+        'วัน/เดือน/ปี':       localDate,
+        'เลขที่ใบกำกับภาษี':  first.order_no || '',
+        'ชื่อลูกค้า':          first.customer || '',
+        'รายละเอียดการเช่า':   desc,
+        'ยอดเงิน':             total,
+        'หมายเหตุ':            first.note || '',
+      };
+    });
+
+  const ws = XLSX.utils.json_to_sheet(rows, {
+    header: ['ลำดับที่','วัน/เดือน/ปี','เลขที่ใบกำกับภาษี','ชื่อลูกค้า','รายละเอียดการเช่า','ยอดเงิน','หมายเหตุ']
+  });
+
+  // ปรับความกว้างคอลัมน์
+  ws['!cols'] = [
+    { wch: 8 },   // ลำดับที่
+    { wch: 14 },  // วัน/เดือน/ปี
+    { wch: 18 },  // เลขที่
+    { wch: 30 },  // ชื่อลูกค้า
+    { wch: 35 },  // รายละเอียด
+    { wch: 12 },  // ยอดเงิน
+    { wch: 20 },  // หมายเหตุ
+  ];
+
+  // Header บริษัทใน row 1
+  XLSX.utils.sheet_add_aoa(ws, [
+    ['Tapathamaraikorruay Co.,Ltd.'],
+    ['ลำดับที่','วัน/เดือน/ปี','เลขที่ใบกำกับภาษี','ชื่อลูกค้า','รายละเอียดการเช่า','ยอดเงิน','หมายเหตุ']
+  ], { origin: 'A1' });
+
+  // ใส่ข้อมูลเริ่มที่ row 3
+  XLSX.utils.sheet_add_json(ws, rows, { origin: 'A3', skipHeader: true });
+
+  // merge header บริษัท A1:G1
+  ws['!merges'] = [{ s: {r:0,c:0}, e: {r:0,c:6} }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'รายการลูกค้า');
+
+  const today = new Date().toLocaleDateString('th-TH',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\//g,'-');
+  XLSX.writeFile(wb, `TAPA_รายการลูกค้า_${today}.xlsx`);
+  showToast('ดาวน์โหลด Excel สำเร็จ', 'ok');
+}
+
 function openBillingList(list) {
   if (list) _billingListData = list; // ถ้า pass มาให้ใช้ ถ้าไม่ก็ใช้ global
   document.getElementById('billing-list-search').value = '';
@@ -3251,6 +3354,7 @@ function openEditBilling(bookingId) {
   document.getElementById('ebl-customer').value   = first.customer || '';
   document.getElementById('ebl-deposit').value    = items.reduce((s,r) => s + Number(r.deposit||0), 0);
   document.getElementById('ebl-fine').value       = items.reduce((s,r) => s + Number(r.fine||0), 0);
+  document.getElementById('ebl-item-price').value = first.item_price || '';
 
   // payment method picker
   document.querySelectorAll('#ebl-payment-picker .cond-option').forEach(o => {
@@ -3362,6 +3466,7 @@ async function submitEditBilling(e) {
       const newCreatedAt = newCreatedDate
         ? new Date(newCreatedDate + 'T05:00:00.000Z').toISOString()
         : null;
+      const newItemPrice = Number(document.getElementById('ebl-item-price').value || 0);
       const patch = {
         order_no:       newOrderNo || null,
         customer:       newCustomer,
@@ -3369,6 +3474,7 @@ async function submitEditBilling(e) {
         payment_status: newStatus,
         deposit:        perItem,
         fine:           finePerItem,
+        ...(newItemPrice > 0 ? { item_price: newItemPrice } : {}),
         ...(newCreatedAt ? { created_at: newCreatedAt } : {}),
       };
       if (newIdCard) patch.id_card_url = newIdCard;

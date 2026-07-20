@@ -3570,8 +3570,7 @@ function renderStockModal() {
             <th style="padding:7px 4px;text-align:left;font-weight:700;">ไซส์</th>
             <th style="padding:7px 4px;text-align:left;font-weight:700;">ชื่อชุด</th>
             <th style="padding:7px 4px;text-align:right;font-weight:700;">เช่า/วัน</th>
-            <th style="padding:7px 4px;text-align:right;font-weight:700;">ทุน</th>
-            <th style="padding:7px 6px;text-align:right;font-weight:700;border-radius:0 8px 0 0;">รายได้${monthFilter!=='all'?'<br><span style=\'font-weight:400;font-size:9px;\'>ช่วงนี้</span>':''}</th>
+            <th style="padding:7px 6px;text-align:right;font-weight:700;border-radius:0 8px 0 0;">ทุน</th>
           </tr>
         </thead>
         <tbody>
@@ -3587,19 +3586,14 @@ function renderStockModal() {
               <td style="padding:6px 4px;color:var(--ink-muted);">${i.size || '—'}</td>
               <td style="padding:6px 4px;font-weight:600;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${i.name || '—'}</td>
               <td style="padding:6px 4px;text-align:right;">฿${Number(i.price||0).toLocaleString()}</td>
-              <td style="padding:6px 4px;text-align:right;color:${cost>0?'var(--ink)':'#c74545'};">${cost>0?'฿'+cost.toLocaleString():'—'}</td>
-              <td style="padding:6px 6px;text-align:right;color:${paidOff?'var(--green)':'var(--ink)'};">
-                ${rev>0?'฿'+rev.toLocaleString():'—'}
-                ${cnt>0?`<div style="font-size:9px;color:var(--ink-muted);">${cnt} ครั้ง</div>`:''}
-              </td>
+              <td style="padding:6px 6px;text-align:right;color:${cost>0?'var(--ink)':'#c74545'};">${cost>0?'฿'+cost.toLocaleString():'—'}</td>
             </tr>`;
           }).join('')}
         </tbody>
         <tfoot>
           <tr style="background:var(--rose-light);font-weight:700;">
             <td colspan="5" style="padding:8px 6px;color:var(--rose-dark);">รวม</td>
-            <td style="padding:8px 4px;text-align:right;color:var(--rose-dark);">฿${totalCost.toLocaleString()}</td>
-            <td style="padding:8px 6px;text-align:right;color:var(--rose-dark);">฿${totalRevInPeriod.toLocaleString()}</td>
+            <td style="padding:8px 6px;text-align:right;color:var(--rose-dark);">฿${totalCost.toLocaleString()}</td>
           </tr>
         </tfoot>
       </table>
@@ -4857,7 +4851,7 @@ function buildReceiptHtml(bookingId, singleCopy) {
         <div style="flex:1;text-align:center;padding:0 8px;">
           <div style="font-size:13px;font-weight:700;">บริษัท ทะพา ทำอะไรก็รวย จำกัด</div>
           <div style="font-size:9.5px;">เลขที่ 38 ถนนบางแสนสาย 4 ใต้ ตำบลแสนสุข อำเภอเมืองชลบุรี จังหวัดชลบุรี</div>
-          <div style="font-size:9.5px;">โทร : 064-2399363, อีเมล์ : tapathamaraikorruay@gmail.com</div>
+          <div style="font-size:9.5px;">โทร : 064-2399363, อีเมล์ : tapathamaraikorruay999@gmail.com</div>
           <div style="font-size:9.5px;">เลขประจำตัวผู้เสียภาษีอากร 0205569027155 (สำนักงานใหญ่)</div>
           <div style="margin-top:5px;display:inline-block;font-size:11px;font-weight:700;border:2px solid #000;padding:3px 14px;text-align:center;line-height:1.3;">
             ใบเสร็จรับเงิน (${label==='สำหรับลูกค้า'?'ต้นฉบับ':'สำเนา'})<br>
@@ -4908,7 +4902,7 @@ function buildReceiptHtml(bookingId, singleCopy) {
       <table style="width:100%;border-collapse:collapse;font-size:10px;">
         <tr>
           <td style="text-align:center;border-top:1px solid #ccc;padding:5px 2px;width:33%;">
-            ผู้รับเงิน<br><br><br>ลงวันที่ ………………
+            ผู้รับเงิน<br><img src="${STAMP_IMG}" style="width:70px;height:70px;object-fit:contain;opacity:0.85;display:block;margin:2px auto;"><br>ลงวันที่ ………………
           </td>
           <td style="text-align:center;border-top:1px solid #ccc;padding:5px 2px;width:34%;">
             ผู้จ่ายเงิน / ผู้รับสินค้า<br><br><br>ลงวันที่ ………………
